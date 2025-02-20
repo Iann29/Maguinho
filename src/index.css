@@ -1,0 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  margin: 0;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #0C0D0F;
+  position: relative;
+}
+
+/* Grid background */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    linear-gradient(to right, rgba(0, 231, 193, 0.07) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 231, 193, 0.07) 1px, transparent 1px);
+  background-size: 64px 64px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Radial gradient overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: 
+    radial-gradient(circle at 50% 0%, rgba(0, 231, 193, 0.15) 0%, transparent 70%),
+    radial-gradient(circle at 0% 50%, rgba(0, 231, 193, 0.08) 0%, transparent 50%),
+    radial-gradient(circle at 100% 50%, rgba(0, 231, 193, 0.08) 0%, transparent 50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+#root {
+  position: relative;
+  z-index: 2;
+}
