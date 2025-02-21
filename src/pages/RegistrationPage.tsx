@@ -82,7 +82,30 @@ export function RegistrationPage() {
         throw new Error('As senhas não coincidem');
       }
 
-      // Registra o usuário no Supabase Auth
+      // Verifica se já existe usuário com o mesmo email, CPF ou telefone
+      const { data: existingUser, error: checkError } = await supabase
+        .from('users')
+        .select('id, email, cpf, phone')
+        .or(`email.eq."${email}",cpf.eq."${rawCPF}",phone.eq."${rawPhone}"`)
+        .maybeSingle();
+
+      if (checkError) {
+        throw new Error('Erro ao verificar usuário existente');
+      }
+
+      if (existingUser) {
+        let errorMessage = 'Já existe um usuário cadastrado com ';
+        if (existingUser.email === email) {
+          errorMessage += 'este email';
+        } else if (existingUser.cpf === rawCPF) {
+          errorMessage += 'este CPF';
+        } else if (existingUser.phone === rawPhone) {
+          errorMessage += 'este telefone';
+        }
+        throw new Error(errorMessage);
+      }
+
+      // Se não existe usuário, cria no Auth
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,

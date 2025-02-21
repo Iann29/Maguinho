@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
 export function LoginPage() {
   const [email, setEmail] = useState('');
@@ -37,11 +38,31 @@ export function LoginPage() {
     setError(null);
 
     try {
-      // TODO: Implementar lógica de login
-      
-      navigate('/dashboard');
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) {
+        console.error('Erro ao fazer login:', error.message);
+        
+        // Verifica se é erro de email não confirmado
+        if (error.message.includes('Email not confirmed')) {
+          setError('Por favor, confirme seu email antes de fazer login. Verifique sua caixa de entrada.');
+          console.error('Usuário não confirmou o email');
+        } else {
+          setError('Email ou senha incorretos');
+        }
+        return;
+      }
+
+      if (data.user) {
+        console.log('Login bem-sucedido:', data.user.email);
+        navigate('/dashboard');
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro ao fazer login');
+      console.error('Erro inesperado ao fazer login:', err);
+      setError('Ocorreu um erro ao fazer login. Por favor, tente novamente.');
     } finally {
       setLoading(false);
     }
