@@ -1,14 +1,39 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
+import { Eye, EyeOff } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
 export function UpdatePasswordPage() {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+
+  // Verifica se há um token válido na URL
+  useEffect(() => {
+    const checkToken = async () => {
+      try {
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (!session && !searchParams.get('token')) {
+          console.error('Nenhum token encontrado na URL');
+          navigate('/login', {
+            state: {
+              error: 'Link de redefinição de senha inválido ou expirado. Por favor, solicite um novo link.'
+            }
+          });
+        }
+      } catch (err) {
+        console.error('Erro ao verificar sessão:', err);
+      }
+    };
+
+    checkToken();
+  }, [navigate, searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -17,57 +42,57 @@ export function UpdatePasswordPage() {
 
     try {
       if (password !== confirmPassword) {
-        throw new Error('As senhas não coincidem');
+        setError('As senhas não coincidem');
+        return;
       }
 
-      // TODO: Implementar lógica de atualização de senha
-      
-      navigate('/login');
+      if (password.length < 6) {
+        setError('A senha deve ter pelo menos 6 caracteres');
+        return;
+      }
+
+      const { error: updateError } = await supabase.auth.updateUser({
+        password: password
+      });
+
+      if (updateError) {
+        console.error('Erro ao atualizar senha:', updateError.message);
+        setError('Não foi possível atualizar sua senha. Por favor, tente novamente.');
+        return;
+      }
+
+      console.log('Senha atualizada com sucesso!');
+      navigate('/login', {
+        state: {
+          message: 'Senha atualizada com sucesso! Por favor, faça login com sua nova senha.'
+        }
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocorreu um erro ao atualizar a senha');
+      console.error('Erro inesperado ao atualizar senha:', err);
+      setError('Ocorreu um erro inesperado. Por favor, tente novamente.');
     } finally {
       setLoading(false);
     }
   };
 
-  const containerVariants = {
-    hidden: {},
-    visible: {
-      transition: {
-        staggerChildren: 0.15,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
-  };
-
   return (
     <motion.div
       className="max-w-7xl mx-auto px-4 min-h-screen flex flex-col items-center justify-center gap-8"
-      initial="hidden"
-      animate="visible"
-      variants={containerVariants}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
     >
-      <motion.button
-        onClick={() => navigate('/login')}
-        className="flex items-center gap-2 text-gray-400 hover:text-[#00E7C1] transition-all duration-200 group"
-        variants={itemVariants}
-      >
-        <ArrowLeft size={20} className="transition-transform duration-200 group-hover:-translate-x-1" />
-        <span>Voltar para o login</span>
-      </motion.button>
       <motion.div
         className="w-full max-w-lg bg-[#1C1E21]/60 backdrop-blur-sm rounded-lg border border-[#2A2D31]/50 p-8"
-        variants={itemVariants}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
       >
         <motion.h2
           className="text-3xl font-bold mb-6 bg-gradient-to-r from-[#00E7C1] to-[#00E7C1]/80 text-transparent bg-clip-text text-center"
-          variants={itemVariants}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
         >
-          Nova Senha
+          Atualizar Senha
         </motion.h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -75,45 +100,69 @@ export function UpdatePasswordPage() {
             <motion.div
               className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded"
               initial={{ opacity: 0 }}
-              animate={{ opacity: 1, transition: { duration: 0.3 } }}
+              animate={{ opacity: 1 }}
             >
               {error}
             </motion.div>
           )}
 
-          <motion.div variants={itemVariants}>
+          <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
               Nova Senha
             </label>
-            <input
-              type="password"
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]"
-              placeholder="Digite sua nova senha"
-            />
-          </motion.div>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                id="password"
+                name="password"
+                required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]"
+                placeholder="Digite sua nova senha"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+          </div>
 
-          <motion.div variants={itemVariants}>
+          <div>
             <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
-              Confirme a Nova Senha
+              Confirmar Nova Senha
             </label>
-            <input
-              type="password"
-              id="confirmPassword"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              required
-              minLength={6}
-              className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]"
-              placeholder="Digite novamente sua nova senha"
-            />
-          </motion.div>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                id="confirmPassword"
+                name="confirmPassword"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]"
+                placeholder="Confirme sua nova senha"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+          </div>
 
-          <motion.div variants={itemVariants}>
+          <motion.div variants={{
+            hidden: { opacity: 0, y: 20 },
+            visible: {
+              opacity: 1,
+              y: 0,
+            },
+          }}>
             <button
               type="submit"
               disabled={loading}
