@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { LogOut, UserX } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { deleteUserAccount } from '../api/delete-account';
 
 export function DashboardPage() {
   const navigate = useNavigate();
@@ -66,10 +65,18 @@ export function DashboardPage() {
 
     setLoading(true);
     try {
-      const { success, error } = await deleteUserAccount(user.id);
-      
-      if (!success) {
-        throw error;
+      const response = await fetch('/api/delete-user', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ userId: user.id }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Erro ao excluir conta');
       }
 
       await supabase.auth.signOut();
