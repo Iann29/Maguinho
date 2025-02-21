@@ -111,7 +111,9 @@ export function RegistrationPage() {
 
       // Chama a Edge Function para criar o usuário
       const functionsUrl = import.meta.env.VITE_SUPABASE_FUNCTIONS_URL ?? 
-        `${import.meta.env.VITE_SUPABASE_URL.replace('.co', '.functions.supabase.co')}`;
+        `${import.meta.env.VITE_SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co')}`;
+      
+      console.log('URL da Edge Function:', functionsUrl);
       
       const response = await fetch(`${functionsUrl}/create-user`, {
         method: 'POST',
