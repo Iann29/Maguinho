@@ -81,10 +81,14 @@ export function RegistrationPage() {
     setError(null);
     setLoading(true);
 
-    const rawCPF = cpf.replace(/\D/g, '');
-    const rawPhone = '+55' + phone.replace(/\D/g, '');
-
     try {
+      if (password !== confirmPassword) {
+        throw new Error('As senhas não coincidem');
+      }
+
+      const rawCPF = cpf.replace(/\D/g, '');
+      const rawPhone = '+55' + phone.replace(/\D/g, '');
+
       if (rawCPF.length !== 11) {
         throw new Error('CPF inválido');
       }
@@ -93,11 +97,7 @@ export function RegistrationPage() {
         throw new Error('Número de telefone inválido');
       }
 
-      if (password !== confirmPassword) {
-        throw new Error('As senhas não coincidem');
-      }
-
-      // Verifica duplicatas usando a RPC
+      // Verificação local de duplicatas (opcional)
       const conflict = await checkDuplicate(email, rawCPF, rawPhone);
       if (conflict !== 'none') {
         if (conflict === 'email') {
@@ -109,32 +109,31 @@ export function RegistrationPage() {
         }
       }
 
-      // Se não existe usuário, cria no Auth
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-      });
-
-      if (signUpError) throw signUpError;
-
-      if (data.user) {
-        // Insere os dados adicionais na tabela users
-        const { error: insertError } = await supabase.from('users').insert({
-          id: data.user.id,
+      // Chama a Edge Function para criar o usuário
+      const response = await fetch(`${import.meta.env.VITE_SUPABASE_FUNCTIONS_URL}/create-user`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
           name,
           email,
           cpf: rawCPF,
-          phone: rawPhone
-        });
+          phone: rawPhone,
+          password
+        })
+      });
 
-        if (insertError) throw insertError;
-
-        navigate('/login', {
-          state: {
-            message: 'Conta criada com sucesso! Enviamos um email de confirmação para você.'
-          }
-        });
+      const result = await response.json();
+      if (!response.ok) {
+        throw new Error(result.error || 'Ocorreu um erro ao criar sua conta.');
       }
+
+      navigate('/login', {
+        state: {
+          message: 'Conta criada com sucesso! Verifique seu email para confirmar.'
+        }
+      });
     } catch (err) {
       if (err instanceof Error) {
         setError(err.message);
