@@ -86,7 +86,7 @@ export function RegistrationPage() {
       const { data: existingUser, error: checkError } = await supabase
         .from('users')
         .select('id, email, cpf, phone')
-        .or(`email.eq."${email}",cpf.eq."${rawCPF}",phone.eq."${rawPhone}"`)
+        .or(`email.eq.${email},cpf.eq.${rawCPF},phone.eq.${rawPhone}`)
         .maybeSingle();
 
       if (checkError) {
