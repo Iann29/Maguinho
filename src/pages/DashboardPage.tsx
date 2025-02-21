@@ -1,24 +1,55 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { LogOut, UserX } from "lucide-react";
+import { supabase } from '../lib/supabaseClient';
+import { User } from '@supabase/supabase-js';
+
+interface UserData extends User {
+  name?: string;
+  cpf?: string;
+  phone?: string;
+}
 
 export function DashboardPage() {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<UserData | null>(null);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // TODO: Implementar verificação de autenticação
-        const isAuthenticated = false; // Temporário
-        if (!isAuthenticated) {
+        // Verifica se há uma sessão ativa
+        const { data: { session } } = await supabase.auth.getSession();
+
+        if (!session) {
+          console.error('Tentativa de acesso não autorizado à dashboard. Redirecionando para login...');
           navigate('/login');
           return;
         }
+
+        // Busca dados do usuário autenticado
+        const { data: { user } } = await supabase.auth.getUser();
         
-        // TODO: Buscar dados do usuário
-        setUser(null);
+        if (!user) {
+          throw new Error('Usuário não encontrado');
+        }
+
+        // Busca dados adicionais da tabela users
+        const { data: userData, error: userError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', user.id)
+          .single();
+
+        if (userError) {
+          console.error('Erro ao buscar dados do usuário:', userError);
+        }
+
+        // Combina os dados do auth com os dados da tabela users
+        setUser({
+          ...user,
+          ...userData
+        });
       } catch (error) {
         console.error('Erro ao verificar autenticação:', error);
         navigate('/login');
@@ -32,10 +63,16 @@ export function DashboardPage() {
 
   const handleLogout = async () => {
     try {
-      // TODO: Implementar lógica de logout
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Erro ao fazer logout:', error.message);
+        return;
+      }
+
       navigate('/login');
     } catch (error) {
-      console.error('Erro ao fazer logout:', error);
+      console.error('Erro inesperado ao fazer logout:', error);
     }
   };
 
