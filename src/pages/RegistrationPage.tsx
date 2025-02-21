@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
+import { supabase } from '../lib/supabaseClient';
 
 export function RegistrationPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
   const [cpf, setCpf] = useState('');
   const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -64,16 +67,14 @@ export function RegistrationPage() {
     setLoading(true);
 
     const rawCPF = cpf.replace(/\D/g, '');
-    // Adiciona +55 e remove formatação do telefone
     const rawPhone = '+55' + phone.replace(/\D/g, '');
 
     try {
-      // TODO: Implementar validações de usuário existente
       if (rawCPF.length !== 11) {
         throw new Error('CPF inválido');
       }
 
-      if (rawPhone.length !== 14) { // +55 + 11 dígitos
+      if (rawPhone.length !== 14) {
         throw new Error('Número de telefone inválido');
       }
 
@@ -81,15 +82,38 @@ export function RegistrationPage() {
         throw new Error('As senhas não coincidem');
       }
 
-      // TODO: Implementar criação de usuário
-      
-      navigate('/login', {
-        state: {
-          message: 'Conta criada com sucesso! Por favor, faça login.'
-        }
+      // Registra o usuário no Supabase Auth
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
       });
+
+      if (signUpError) throw signUpError;
+
+      if (data.user) {
+        // Insere os dados adicionais na tabela users
+        const { error: insertError } = await supabase.from('users').insert({
+          id: data.user.id,
+          name,
+          email,
+          cpf: rawCPF,
+          phone: rawPhone
+        });
+
+        if (insertError) throw insertError;
+
+        navigate('/login', {
+          state: {
+            message: 'Conta criada com sucesso! Enviamos um email de confirmação para você.'
+          }
+        });
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Ocorreu um erro ao criar sua conta.');
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError('Ocorreu um erro ao criar sua conta.');
+      }
     } finally {
       setLoading(false);
     }
@@ -151,7 +175,9 @@ export function RegistrationPage() {
               id="name"
               name="name"
               required
-              className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1] transition-colors"
               placeholder="Digite seu nome completo"
             />
           </motion.div>
@@ -164,15 +190,17 @@ export function RegistrationPage() {
             },
           }}>
             <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
-              Email
+              E-mail
             </label>
             <input
               type="email"
               id="email"
               name="email"
               required
-              className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]"
-              placeholder="Digite seu email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1] transition-colors"
+              placeholder="Digite seu e-mail"
             />
           </motion.div>
 

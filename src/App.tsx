@@ -7,7 +7,6 @@ import { UpdatePasswordPage } from './pages/UpdatePasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
-import { GlareCard } from './components/ui/glare-card';
 import { motion } from 'framer-motion';
 
 // Layout principal que contém o header e footer
@@ -54,7 +53,7 @@ function HomePage() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 lg:gap-10 max-w-5xl mx-auto">
         <div className="flex justify-center">
-          <GlareCard className="flex flex-col items-center justify-center text-center p-4 sm:p-5">
+          <div className="flex flex-col items-center justify-center text-center p-4 sm:p-5 bg-[#1C1E21]/60 backdrop-blur-sm rounded-lg border border-[#2A2D31]/50">
             <svg
               className="w-7 h-7 sm:w-10 sm:h-10 text-[#00E7C1] mb-3 sm:mb-4"
               fill="none"
@@ -72,11 +71,11 @@ function HomePage() {
             <p className="text-sm sm:text-base text-gray-400">
               Interface intuitiva que permite você começar a estudar em segundos
             </p>
-          </GlareCard>
+          </div>
         </div>
 
         <div className="flex justify-center">
-          <GlareCard className="flex flex-col items-center justify-center text-center p-4 sm:p-5">
+          <div className="flex flex-col items-center justify-center text-center p-4 sm:p-5 bg-[#1C1E21]/60 backdrop-blur-sm rounded-lg border border-[#2A2D31]/50">
             <svg
               className="w-7 h-7 sm:w-10 sm:h-10 text-[#00E7C1] mb-3 sm:mb-4"
               fill="none"
@@ -94,11 +93,11 @@ function HomePage() {
             <p className="text-sm sm:text-base text-gray-400">
               Nunca perca uma sessão de estudo com nossos lembretes personalizados
             </p>
-          </GlareCard>
+          </div>
         </div>
 
         <div className="flex justify-center">
-          <GlareCard className="flex flex-col items-center justify-center text-center p-4 sm:p-5">
+          <div className="flex flex-col items-center justify-center text-center p-4 sm:p-5 bg-[#1C1E21]/60 backdrop-blur-sm rounded-lg border border-[#2A2D31]/50">
             <svg
               className="w-7 h-7 sm:w-10 sm:h-10 text-[#00E7C1] mb-3 sm:mb-4"
               fill="none"
@@ -116,7 +115,7 @@ function HomePage() {
             <p className="text-sm sm:text-base text-gray-400">
               Personalize seu ambiente de estudo do seu jeito
             </p>
-          </GlareCard>
+          </div>
         </div>
       </div>
     </div>

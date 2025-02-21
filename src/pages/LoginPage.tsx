@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
 
@@ -11,6 +11,7 @@ export function LoginPage() {
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -74,6 +75,17 @@ export function LoginPage() {
         </motion.h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
+          {location.state?.message && (
+            <motion.div
+              className="bg-yellow-500/10 border border-yellow-500 text-yellow-500 px-4 py-3 rounded text-center"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1, transition: { duration: 0.3 } }}
+            >
+              <p className="font-medium">{location.state.message}</p>
+              <p className="text-sm mt-1 text-yellow-400 font-medium">Verifique seu email para confirmar sua conta.</p>
+            </motion.div>
+          )}
+
           {error && (
             <motion.div
               className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded"
