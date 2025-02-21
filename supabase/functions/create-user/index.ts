@@ -62,8 +62,8 @@ serve(async (req) => {
 
     const isLocal = Deno.env.get('ENVIRONMENT') === 'local';
     const redirectUrl = isLocal
-      ? Deno.env.get('EMAIL_REDIRECT_LOCAL')
-      : Deno.env.get('EMAIL_REDIRECT_PROD');
+      ? (Deno.env.get('EMAIL_REDIRECT_LOCAL') ?? 'http://localhost:5173/login')
+      : (Deno.env.get('EMAIL_REDIRECT_PROD') ?? 'https://maguinho.com/login');
 
     console.log('Usando URL de redirecionamento:', redirectUrl);
 
