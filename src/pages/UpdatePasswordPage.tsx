@@ -13,33 +13,32 @@ export function UpdatePasswordPage() {
   useEffect(() => {
     const handlePasswordRecovery = async () => {
       try {
-        // Pega o hash da URL
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = hashParams.get('access_token');
-        const refreshToken = hashParams.get('refresh_token');
-        const type = hashParams.get('type');
+        // Pega o código da URL
+        const params = new URLSearchParams(location.search);
+        const code = params.get('code');
 
-        console.log('Hash params:', { accessToken, refreshToken, type });
+        console.log('Código recuperado:', code);
 
-        if (!accessToken || !type) {
-          console.error('Parâmetros de autenticação não encontrados');
+        if (!code) {
+          console.error('Código não encontrado na URL');
           setError('Link de recuperação inválido ou expirado');
           return;
         }
 
-        // Se tivermos os tokens, vamos tentar estabelecer a sessão
-        const { data, error: sessionError } = await supabase.auth.setSession({
-          access_token: accessToken,
-          refresh_token: refreshToken || ''
+        // Verifica o código de recuperação
+        const { data, error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: code,
+          type: 'recovery'
         });
 
-        if (sessionError) {
-          console.error('Erro ao estabelecer sessão:', sessionError);
-          setError('Erro ao verificar link de recuperação');
+        console.log('Resposta da verificação:', { data, error: verifyError });
+
+        if (verifyError) {
+          console.error('Erro na verificação:', verifyError);
+          setError('Link de recuperação inválido ou expirado');
           return;
         }
 
-        console.log('Sessão estabelecida:', data);
       } catch (error) {
         console.error('Erro ao processar recuperação:', error);
         setError('Erro ao processar link de recuperação');
@@ -47,7 +46,7 @@ export function UpdatePasswordPage() {
     };
 
     handlePasswordRecovery();
-  }, []);
+  }, [location]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();

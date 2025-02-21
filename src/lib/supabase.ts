@@ -8,7 +8,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce',
+    flowType: 'recovery',
     redirectTo: `${window.location.origin}/update-password`,
     storage: window.localStorage,
     storageKey: 'supabase.auth.token',
