@@ -32,7 +32,6 @@ dist-ssr
 
 # Project specific
 .bolt
-estruturabanco.txt
 
 # windsurf rules
 .windsurfrules

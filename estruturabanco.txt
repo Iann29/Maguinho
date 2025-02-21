@@ -1,0 +1,289 @@
+# .windsurfrules
+#
+# Arquivo de configuração e documentação da estrutura de banco de dados
+# do projeto "Maguinho". Abaixo está descrito todo o esquema PostgreSQL,
+# com explicações de cada tabela, suas chaves e triggers.
+
+################################################################################
+# EXTENSÃO pgcrypto
+#
+# Utilizada para gerar UUID aleatórios (gen_random_uuid()) em nossas tabelas.
+################################################################################
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+################################################################################
+# FUNÇÃO update_timestamp()
+#
+# Função de trigger que atualiza o campo updated_at para "now()" antes de cada
+# UPDATE em tabelas específicas. Isso permite sabermos a data/hora da última
+# modificação em cada registro.
+################################################################################
+CREATE OR REPLACE FUNCTION public.update_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = now();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+################################################################################
+# TABELA: public.users
+#
+# Armazena dados de usuários da plataforma:
+# - id (UUID): Identificador único.
+# - name: Nome completo do usuário.
+# - email (UNIQUE): E-mail único do usuário.
+# - cpf (UNIQUE): CPF único do usuário.
+# - phone: Telefone de contato.
+# - password: Senha em formato de hash (NUNCA em texto puro).
+# - created_at, updated_at: Datas de criação e atualização do registro.
+#
+# Triggers:
+# - update_users_timestamp: Atualiza updated_at via update_timestamp().
+################################################################################
+CREATE TABLE IF NOT EXISTS public.users (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL UNIQUE,
+  cpf TEXT NOT NULL UNIQUE,
+  phone TEXT,
+  password TEXT NOT NULL,  -- armazenar hash seguro (bcrypt, Argon2, etc.)
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER update_users_timestamp
+BEFORE UPDATE ON public.users
+FOR EACH ROW
+EXECUTE FUNCTION public.update_timestamp();
+
+################################################################################
+# TABELA: public.coupons
+#
+# Armazena cupons de desconto para a plataforma:
+# - code (UNIQUE): Código do cupom (ex.: "MAGUINHO10").
+# - discount_type: Tipo de desconto ('percent' ou 'fixed').
+# - discount_value: Valor numérico do desconto (pode ser percentual ou fixo).
+# - usage_limit: Quantidade máxima de usos do cupom.
+# - usage_count: Quantidade de usos já realizados.
+# - expires_at: Data de expiração do cupom (opcional).
+# - created_at, updated_at: Datas de criação e atualização.
+#
+# Triggers:
+# - update_coupons_timestamp: Atualiza updated_at via update_timestamp().
+################################################################################
+CREATE TABLE IF NOT EXISTS public.coupons (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  discount_type TEXT NOT NULL 
+    CHECK (discount_type IN ('percent', 'fixed')),
+  discount_value NUMERIC(10,2) NOT NULL DEFAULT 0,
+  usage_limit INT NOT NULL DEFAULT 1,
+  usage_count INT NOT NULL DEFAULT 0,
+  expires_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER update_coupons_timestamp
+BEFORE UPDATE ON public.coupons
+FOR EACH ROW
+EXECUTE FUNCTION public.update_timestamp();
+
+################################################################################
+# TABELA: public.plans
+#
+# Define os planos de assinatura disponíveis:
+# - name: Nome do plano (ex.: "Básico", "Premium").
+# - price: Valor padrão do plano.
+# - currency: Moeda (ex.: "BRL").
+# - billing_interval: Periodicidade (mensal, trimestral ou anual).
+# - description: Descrição adicional do plano.
+# - active: Indica se o plano está ativo.
+# - created_at, updated_at: Datas de criação e atualização.
+#
+# Triggers:
+# - update_plans_timestamp: Atualiza updated_at via update_timestamp().
+################################################################################
+CREATE TABLE IF NOT EXISTS public.plans (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  name TEXT NOT NULL,
+  price NUMERIC(10,2) NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'BRL',
+  billing_interval TEXT NOT NULL
+    CHECK (billing_interval IN ('mensal', 'trimestral', 'anual')),
+  description TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER update_plans_timestamp
+BEFORE UPDATE ON public.plans
+FOR EACH ROW
+EXECUTE FUNCTION public.update_timestamp();
+
+################################################################################
+# TABELA: public.subscriptions
+#
+# Gerencia as assinaturas dos usuários em relação aos planos:
+# - user_id (FK -> users.id): Usuário que possui a assinatura.
+# - plan_id (FK -> plans.id): Plano assinado.
+# - status: Status da assinatura ('active', 'canceled', 'expired', etc.).
+# - start_date, end_date: Datas de início e término da assinatura.
+# - coupon_id (FK -> coupons.id): Cupom aplicado (opcional).
+# - gifted_by (FK -> users.id): Se for presenteado, quem presenteou.
+# - override_price: Valor personalizado para a assinatura (ex.: desconto único).
+# - created_at, updated_at: Datas de criação e atualização.
+#
+# Triggers:
+# - update_subscriptions_timestamp: Atualiza updated_at via update_timestamp().
+################################################################################
+CREATE TABLE IF NOT EXISTS public.subscriptions (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL 
+    REFERENCES public.users(id) ON DELETE CASCADE,
+  plan_id UUID NOT NULL 
+    REFERENCES public.plans(id) ON DELETE RESTRICT,
+  status TEXT NOT NULL DEFAULT 'active',
+  start_date TIMESTAMPTZ NOT NULL DEFAULT now(),
+  end_date TIMESTAMPTZ,
+  
+  coupon_id UUID REFERENCES public.coupons(id) ON DELETE SET NULL,
+  gifted_by UUID REFERENCES public.users(id) ON DELETE SET NULL,
+  
+  override_price NUMERIC(10,2),
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER update_subscriptions_timestamp
+BEFORE UPDATE ON public.subscriptions
+FOR EACH ROW
+EXECUTE FUNCTION public.update_timestamp();
+
+################################################################################
+# TABELA: public.coupon_usages
+#
+# Rastreia o uso de cupons individualmente:
+# - coupon_id (FK -> coupons.id): Qual cupom foi usado.
+# - user_id (FK -> users.id): Qual usuário utilizou o cupom.
+# - used_at: Data/hora em que o cupom foi utilizado.
+################################################################################
+CREATE TABLE IF NOT EXISTS public.coupon_usages (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  coupon_id UUID NOT NULL 
+    REFERENCES public.coupons(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL 
+    REFERENCES public.users(id) ON DELETE CASCADE,
+  used_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+################################################################################
+# TABELA: public.payments
+#
+# Registra pagamentos feitos pelos usuários:
+# - user_id (FK -> users.id): Quem está pagando.
+# - subscription_id (FK -> subscriptions.id): Referência a uma assinatura (opcional).
+# - amount: Valor do pagamento.
+# - currency: Moeda (ex.: "BRL").
+# - payment_method: Método (ex.: "PIX", "cartao", "boleto").
+# - transaction_id: ID da transação no gateway de pagamento (ex.: Stripe, etc.).
+# - status: Status do pagamento ('pending', 'paid', 'canceled', 'refunded', etc.).
+# - created_at, updated_at: Datas de criação e atualização.
+#
+# Triggers:
+# - update_payments_timestamp: Atualiza updated_at via update_timestamp().
+################################################################################
+CREATE TABLE IF NOT EXISTS public.payments (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL 
+    REFERENCES public.users(id) ON DELETE CASCADE,
+  subscription_id UUID 
+    REFERENCES public.subscriptions(id) ON DELETE SET NULL,
+  amount NUMERIC(10,2) NOT NULL,
+  currency TEXT NOT NULL DEFAULT 'BRL',
+  payment_method TEXT,
+  transaction_id TEXT,
+  status TEXT NOT NULL DEFAULT 'pending',
+  
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TRIGGER update_payments_timestamp
+BEFORE UPDATE ON public.payments
+FOR EACH ROW
+EXECUTE FUNCTION public.update_timestamp();
+
+################################################################################
+# TABELA: public.financial_logs
+#
+# Armazena registros de eventos financeiros importantes (log):
+# - user_id (FK -> users.id): Usuário relacionado ao evento (se aplicável).
+# - action: Ação executada (ex.: "PAYMENT_CREATED", "PAYMENT_PAID").
+# - description: Descrição detalhada.
+# - data (JSONB): Dados adicionais (ex.: {"valor":100, "status":"paid"}).
+# - created_at: Data/hora de criação do log.
+################################################################################
+CREATE TABLE IF NOT EXISTS public.financial_logs (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+  action TEXT NOT NULL,
+  description TEXT,
+  data JSONB,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+################################################################################
+# TABELA: public.webhook_logs
+#
+# Armazena logs de webhooks recebidos de provedores de pagamento ou serviços
+# externos:
+# - provider: Nome do serviço (ex.: "Stripe", "MercadoPago").
+# - event_type: Tipo de evento (ex.: "payment_intent.succeeded").
+# - payload (JSONB): Dados completos do webhook.
+# - created_at: Data/hora em que o webhook foi recebido.
+################################################################################
+CREATE TABLE IF NOT EXISTS public.webhook_logs (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  provider TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+################################################################################
+# OBSERVAÇÕES GERAIS
+#
+# 1. ARMAZENAMENTO DE SENHAS:
+#    - O campo "password" em public.users deve conter apenas o HASH (bcrypt, Argon2, etc.).
+#      Nunca armazene senhas em texto puro.
+#
+# 2. RELACIONAMENTOS:
+#    - ON DELETE CASCADE: Ao excluir um usuário, por exemplo, todas as assinaturas
+#      relacionadas são removidas. Em "subscriptions", se remover o usuário, a assinatura
+#      também é removida.
+#    - ON DELETE SET NULL: Ao excluir um registro em coupons, o campo coupon_id em
+#      subscriptions fica NULL, preservando a assinatura mas removendo a referência
+#      ao cupom.
+#
+# 3. TRIGGERS DE updated_at:
+#    - As tabelas com "updated_at" possuem triggers que chamam a função "update_timestamp()"
+#      antes de cada UPDATE, mantendo o registro atualizado automaticamente.
+#
+# 4. POSSÍVEIS ÍNDICES:
+#    - Caso seja necessário otimizar consultas frequentes (WHERE / JOIN) em user_id, plan_id,
+#      status, etc., podem ser criados índices como:
+#        CREATE INDEX idx_subscriptions_user_id ON public.subscriptions (user_id);
+#        CREATE INDEX idx_payments_status ON public.payments (status);
+#      entre outros.
+#
+# 5. SEGURANÇA:
+#    - Para impedir acesso não autorizado a senhas ou dados sensíveis, configure
+#      Row-Level Security (RLS) no Supabase e defina Policies adequadas.
+#    - Restrinja ao máximo a leitura da coluna "password" apenas para fins de
+#      autenticação (idealmente nem retorne essa coluna no SELECT).
+#
+# FIM DO ARQUIVO .windsurfrules
