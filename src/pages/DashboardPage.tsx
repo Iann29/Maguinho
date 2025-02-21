@@ -129,34 +129,31 @@ export function DashboardPage() {
     }
 
     try {
-      const { data: { user }, error: getUserError } = await supabase.auth.getUser();
-      if (getUserError || !user) {
-        console.error('Usuário não encontrado ou não autenticado:', getUserError);
+      // Obter sessão do usuário
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        console.error('Usuário não autenticado');
         navigate('/login');
         return;
       }
 
-      // 1) Remove registro na tabela 'users'
-      const { error: deleteTableError } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', user.id);
+      // Chamar Edge Function para deletar usuário
+      const res = await fetch('https://zssitwbdprfnqglttwhs.functions.supabase.co/delete-user', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        }
+      });
 
-      if (deleteTableError) {
-        console.error('Erro ao deletar na tabela users:', deleteTableError.message);
-        alert('Erro ao excluir dados do usuário. Por favor, tente novamente.');
+      if (!res.ok) {
+        const { error } = await res.json();
+        console.error('Erro ao excluir conta via Edge Function:', error);
+        alert('Erro ao excluir conta. Por favor, tente novamente.');
         return;
       }
 
-      // 2) Remove da Auth (requer service role ou function)
-      const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(user.id);
-      if (deleteAuthError) {
-        console.error('Erro ao deletar usuário no Auth:', deleteAuthError.message);
-        alert('Erro ao excluir conta. Por favor, contate o suporte.');
-        return;
-      }
-
-      // 3) Efetua signOut local e redireciona
+      // Se chegou aqui, a conta foi excluída com sucesso
       console.log('Conta excluída com sucesso. Até logo!');
       await supabase.auth.signOut();
       navigate('/login', {

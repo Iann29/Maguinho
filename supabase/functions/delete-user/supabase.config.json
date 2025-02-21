@@ -3,5 +3,9 @@
   "version": "1",
   "memory": 256,
   "maxDuration": 10,
-  "cors": ["*"]
+  "cors": {
+    "allow_origin": ["*"],
+    "allow_methods": ["POST", "OPTIONS"],
+    "allow_headers": ["Authorization", "Content-Type"]
+  }
 }
