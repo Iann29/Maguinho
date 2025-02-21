@@ -9,66 +9,42 @@ export function UpdatePasswordPage() {
   const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isValidSession, setIsValidSession] = useState(false);
 
   useEffect(() => {
-    const checkRecoveryCode = async () => {
+    const checkSession = async () => {
       try {
-        // Tenta pegar o código de várias formas possíveis
-        const params = new URLSearchParams(location.search);
-        const codeFromQuery = params.get('code');
-        const codeFromHash = location.hash.replace('#', '');
-        const codeToUse = codeFromQuery || codeFromHash;
-
-        console.log('URL completa:', window.location.href);
-        console.log('Código da query:', codeFromQuery);
-        console.log('Código do hash:', codeFromHash);
-        console.log('Código que será usado:', codeToUse);
-
-        if (!codeToUse) {
-          console.error('Nenhum código encontrado na URL');
-          setError('Link de recuperação inválido');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Erro ao verificar sessão:', error);
+          setError('Erro ao verificar link de recuperação');
           return;
         }
 
-        // Tenta verificar o código
-        const { data, error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: codeToUse,
-          type: 'recovery'
-        });
-
-        console.log('Resposta da verificação:', { data, error: verifyError });
-
-        if (verifyError) {
-          console.error('Erro na verificação:', verifyError);
+        if (!session) {
+          console.error('Sessão não encontrada');
           setError('Link de recuperação inválido ou expirado');
           return;
         }
 
+        setIsValidSession(true);
       } catch (error) {
-        console.error('Erro ao processar código de recuperação:', error);
-        setError('Erro ao processar o link de recuperação');
+        console.error('Erro ao verificar sessão:', error);
+        setError('Erro ao verificar link de recuperação');
       }
     };
 
-    checkRecoveryCode();
-  }, [location]);
-
-  const containerVariants = {
-    hidden: {},
-    visible: {
-      transition: {
-        staggerChildren: 0.15,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
-  };
+    checkSession();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    if (!isValidSession) {
+      setError('Link de recuperação inválido ou expirado');
+      return;
+    }
+
     setError(null);
     setLoading(true);
 
@@ -83,14 +59,15 @@ export function UpdatePasswordPage() {
     }
 
     try {
-      const { data, error } = await supabase.auth.updateUser({
+      const { error } = await supabase.auth.updateUser({
         password: password
       });
 
-      console.log('Resposta da atualização:', { data, error });
-
       if (error) throw error;
 
+      // Fazer logout após atualizar a senha
+      await supabase.auth.signOut();
+      
       navigate('/login', { 
         state: { message: 'Senha atualizada com sucesso! Faça login com sua nova senha.' }
       });
@@ -100,6 +77,20 @@ export function UpdatePasswordPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const containerVariants = {
+    hidden: {},
+    visible: {
+      transition: {
+        staggerChildren: 0.15,
+      },
+    },
+  };
+
+  const itemVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
   };
 
   return (

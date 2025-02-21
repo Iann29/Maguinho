@@ -8,13 +8,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: true,
-    flowType: 'pkce',
-    // Atualizando a URL de redirecionamento para incluir o código
-    redirectTo: `${window.location.origin}/update-password?code=`,
-    // Configurações adicionais para debug
-    debug: true,
-    // Configurando o storage para persistir a sessão
-    storage: window.localStorage,
-    storageKey: 'supabase.auth.token'
+    // Usando a nova rota
+    redirectTo: `${window.location.origin}/recuperar-senha`,
+    // Desabilitando PKCE temporariamente para testar
+    flowType: 'implicit'
   }
 })

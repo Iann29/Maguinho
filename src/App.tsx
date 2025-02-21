@@ -131,9 +131,7 @@ function App() {
         <Route path="/register" element={<Layout><RegistrationPage /></Layout>} />
         <Route path="/login" element={<Layout><LoginPage /></Layout>} />
         <Route path="/reset-password" element={<Layout><ResetPasswordPage /></Layout>} />
-        <Route path="/update-password" element={<Layout><UpdatePasswordPage /></Layout>} />
-        {/* Adicionando rota que aceita o parâmetro code */}
-        <Route path="/update-password/:code" element={<Layout><UpdatePasswordPage /></Layout>} />
+        <Route path="/recuperar-senha" element={<Layout><UpdatePasswordPage /></Layout>} />
         <Route path="/dashboard" element={<DashboardPage />} />
       </Routes>
     </Router>
