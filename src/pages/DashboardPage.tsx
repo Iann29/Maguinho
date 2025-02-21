@@ -111,6 +111,7 @@ export function DashboardPage() {
         return;
       }
 
+      console.log('Logout bem-sucedido! Até logo!');
       navigate('/login');
     } catch (error) {
       console.error('Erro inesperado ao fazer logout:', error);
