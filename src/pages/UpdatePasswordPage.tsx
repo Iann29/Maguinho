@@ -1,25 +1,44 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 export function UpdatePasswordPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Verifica se o usuário está autenticado via token de recuperação
-    const checkSession = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+    // Pega o código da URL, seja dos parâmetros ou do query string
+    const code = new URLSearchParams(location.search).get('code');
+    
+    if (!code) {
+      navigate('/login');
+      return;
+    }
+
+    // Verifica se o código é válido
+    const verifyCode = async () => {
+      try {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: code,
+          type: 'recovery'
+        });
+
+        if (error) {
+          console.error('Erro ao verificar código:', error);
+          navigate('/login');
+        }
+      } catch (error) {
+        console.error('Erro ao verificar código:', error);
         navigate('/login');
       }
     };
 
-    checkSession();
-  }, [navigate]);
+    verifyCode();
+  }, [navigate, location]);
 
   const containerVariants = {
     hidden: {},
@@ -57,14 +76,12 @@ export function UpdatePasswordPage() {
 
       if (error) throw error;
 
-      // Redireciona para o login com mensagem de sucesso
-      navigate('/login', {
-        state: {
-          message: 'Senha atualizada com sucesso! Faça login com sua nova senha.'
-        }
+      navigate('/login', { 
+        state: { message: 'Senha atualizada com sucesso! Faça login com sua nova senha.' }
       });
-    } catch (err: any) {
-      setError(err.message || 'Ocorreu um erro ao atualizar sua senha.');
+    } catch (error: any) {
+      console.error('Erro ao atualizar senha:', error);
+      setError(error.message || 'Erro ao atualizar senha');
     } finally {
       setLoading(false);
     }
