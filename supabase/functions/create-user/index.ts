@@ -4,19 +4,16 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 serve(async (req) => {
-  // Cabeçalhos para CORS
   const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'authorization, content-type'
   };
 
-  // Responde requisições OPTIONS (preflight)
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  // Permite apenas POST
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Método não permitido' }),
@@ -25,10 +22,8 @@ serve(async (req) => {
   }
 
   try {
-    // Ler JSON do body
     const { name, email, cpf, phone, password } = await req.json();
 
-    // Valida se campos mínimos foram enviados
     if (!name || !email || !password || !cpf || !phone) {
       return new Response(
         JSON.stringify({ error: 'Campos obrigatórios ausentes' }),
@@ -36,16 +31,15 @@ serve(async (req) => {
       );
     }
 
-    // Criar cliente Supabase com a Service Role
+    console.log('Recebendo dados para criar usuário:', { name, email, cpf, phone });
+
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    // (Opcional) Checar duplicados manualmente
-    //   - Você pode usar as constraints UNIQUE e simplesmente capturar o erro 23505 (duplicate key)
-    //   - Ou pode verificar manualmente:
+    // Verificar duplicatas
     const { data: existing, error: checkError } = await supabaseAdmin
       .from('users')
       .select('id')
@@ -53,6 +47,7 @@ serve(async (req) => {
       .maybeSingle();
 
     if (checkError) {
+      console.error('Erro ao verificar duplicados:', checkError);
       throw new Error('Erro ao verificar duplicados');
     }
     if (existing) {
@@ -62,24 +57,41 @@ serve(async (req) => {
       );
     }
 
-    // 1) Cria o usuário no Auth com email de confirmação
-    const { data: userData, error: createError } = await supabaseAdmin.auth.admin.createUser({
+    // Criar usuário no Auth com confirmação de email
+    console.log('Criando usuário no Auth com email:', email);
+
+    const isLocal = Deno.env.get('ENVIRONMENT') === 'local';
+    const redirectUrl = isLocal
+      ? Deno.env.get('EMAIL_REDIRECT_LOCAL')
+      : Deno.env.get('EMAIL_REDIRECT_PROD');
+
+    console.log('Usando URL de redirecionamento:', redirectUrl);
+
+    // Criar usuário usando signUp em vez de createUser
+    const { data: userData, error: createError } = await supabaseAdmin.auth.signUp({
       email,
       password,
-      email_confirm: false, // false = envia email de confirmação (depende da config do seu Auth)
-      // Você pode inserir dados no user_metadata, se quiser
-      user_metadata: { name, cpf, phone },
+      options: {
+        emailRedirectTo: redirectUrl,
+        data: {
+          name,
+          cpf,
+          phone
+        }
+      }
     });
 
     if (createError) {
-      // Se for erro do Supabase, retorne
+      console.error('Erro ao criar usuário no Auth:', createError);
       return new Response(
         JSON.stringify({ error: createError.message }),
         { status: 400, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
       );
     }
 
-    // 2) Insere na tabela `users` (ignora RLS pois está com Service Role)
+    console.log('Usuário criado no Auth:', userData.user?.id);
+
+    // Inserir na tabela `users`
     const { error: insertError } = await supabaseAdmin
       .from('users')
       .insert({
@@ -91,7 +103,6 @@ serve(async (req) => {
       });
 
     if (insertError) {
-      // Pode ser erro de UNIQUE constraint ou outro
       console.error('Erro ao inserir na tabela users:', insertError);
       return new Response(
         JSON.stringify({ error: 'Falha ao inserir dados de usuário na tabela' }),
@@ -99,14 +110,14 @@ serve(async (req) => {
       );
     }
 
-    // Se chegou aqui, deu tudo certo
+    console.log('Usuário inserido na tabela users com sucesso:', userData.user?.id);
     return new Response(
       JSON.stringify({ message: 'Usuário criado com sucesso. Verifique seu email para confirmar.' }),
       { status: 201, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
     );
 
   } catch (error) {
-    console.error('Erro ao criar usuário:', error);
+    console.error('Erro geral ao criar usuário:', error);
     return new Response(
       JSON.stringify({ error: 'Erro interno ao criar usuário' }),
       { status: 500, headers: { 'Content-Type': 'application/json', ...corsHeaders } }
