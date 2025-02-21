@@ -1,29 +1,16 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 
 export function LoginPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rememberMe, setRememberMe] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [message, setMessage] = useState<string | null>(
-    (location.state as any)?.message || null
-  );
-
-  useEffect(() => {
-    if (message) {
-      const timer = setTimeout(() => {
-        setMessage(null);
-      }, 5000); // 5 segundos
-
-      return () => clearTimeout(timer);
-    }
-  }, [message]);
+  const navigate = useNavigate();
 
   const containerVariants = {
     hidden: { opacity: 0 },
@@ -43,39 +30,17 @@ export function LoginPage() {
     },
   };
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
+    setError(null);
 
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-        options: {
-          persistSession: rememberMe // Persiste a sessão se "Lembrar minha senha" estiver marcado
-        }
-      });
-
-      if (error) {
-        if (error.message.includes('Invalid login credentials')) {
-          setError('Email ou senha incorretos. Verifique suas credenciais ou se sua conta ainda existe.');
-        } else if (error.message.includes('Email not confirmed')) {
-          setError('Por favor, confirme seu email antes de fazer login. Verifique sua caixa de entrada.');
-        } else {
-          setError(error.message);
-        }
-        return;
-      }
-
-      // Login bem sucedido
+      // TODO: Implementar lógica de login
+      
       navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.message || 'Ocorreu um erro ao fazer login.');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erro ao fazer login');
     } finally {
       setLoading(false);
     }
@@ -109,18 +74,6 @@ export function LoginPage() {
         </motion.h2>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {message && (
-            <motion.div
-              className="bg-[#00E7C1]/10 border border-[#00E7C1] text-[#00E7C1] px-4 py-2 rounded"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.3 }}
-            >
-              {message}
-            </motion.div>
-          )}
-
           {error && (
             <motion.div
               className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded"
@@ -140,6 +93,8 @@ export function LoginPage() {
               id="email"
               name="email"
               required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]"
               placeholder="Digite seu email"
             />
@@ -155,6 +110,8 @@ export function LoginPage() {
                 id="password"
                 name="password"
                 required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]"
                 placeholder="Digite sua senha"
               />

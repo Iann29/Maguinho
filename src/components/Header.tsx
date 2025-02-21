@@ -1,77 +1,40 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { User } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Menu } from 'lucide-react';
 
 export function Header() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [user, setUser] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
-  
-  useEffect(() => {
-    // Verifica se o usuário está logado e se a conta ainda existe
-    const checkUser = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        
-        if (user) {
-          // Verifica se o usuário ainda existe na tabela users
-          const { data: userData, error: userError } = await supabase
-            .from('users')
-            .select('id')
-            .eq('id', user.id)
-            .single();
+  const navigate = useNavigate();
 
-          if (userError || !userData) {
-            // Se não encontrar o usuário na tabela, faz logout
-            await supabase.auth.signOut();
-            setUser(null);
-          } else {
-            setUser(user);
-          }
-        } else {
+  useEffect(() => {
+    // TODO: Implementar verificação de autenticação
+    const checkAuth = async () => {
+      try {
+        // Aqui virá a nova lógica de autenticação
+        const isAuthenticated = false; // Temporário
+        if (!isAuthenticated) {
           setUser(null);
         }
       } catch (error) {
-        console.error('Erro ao verificar usuário:', error);
+        console.error('Erro ao verificar autenticação:', error);
         setUser(null);
-      } finally {
-        setLoading(false);
       }
     };
 
-    checkUser();
-
-    // Escuta mudanças no estado de autenticação
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (session?.user) {
-        // Verifica se o usuário existe na tabela users
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('id')
-          .eq('id', session.user.id)
-          .single();
-
-        if (userError || !userData) {
-          await supabase.auth.signOut();
-          setUser(null);
-        } else {
-          setUser(session.user);
-        }
-      } else {
-        setUser(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    checkAuth();
   }, []);
-  
-  // Não mostra nada enquanto está verificando o usuário
-  if (loading) {
-    return null;
-  }
-  
+
+  const handleLogout = async () => {
+    try {
+      // TODO: Implementar lógica de logout
+      setUser(null);
+      navigate('/login');
+    } catch (error) {
+      console.error('Erro ao fazer logout:', error);
+    }
+  };
+
   return (
     <header className="bg-[#1C1E21]/60 backdrop-blur-sm border-b border-[#2A2D31]/50">
       <div className="max-w-7xl mx-auto px-6 py-4">
@@ -85,10 +48,10 @@ export function Header() {
           <div className="flex items-center gap-4">
             {user ? (
               <button 
-                onClick={() => navigate('/dashboard')}
+                onClick={handleLogout}
                 className="flex items-center justify-center w-10 h-10 rounded-full bg-[#00E7C1]/10 hover:bg-[#00E7C1]/20 transition-colors"
               >
-                <User className="w-5 h-5 text-[#00E7C1]" />
+                <Menu className="w-5 h-5 text-[#00E7C1]" />
               </button>
             ) : (
               <>

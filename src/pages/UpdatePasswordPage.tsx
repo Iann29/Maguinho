@@ -1,86 +1,30 @@
-import { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import { motion } from 'framer-motion';
 
 export function UpdatePasswordPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const navigate = useNavigate();
 
-  useEffect(() => {
-    const handlePasswordRecovery = async () => {
-      try {
-        // Pega o código da URL
-        const params = new URLSearchParams(location.search);
-        const code = params.get('code');
-
-        console.log('Código recuperado:', code);
-
-        if (!code) {
-          console.error('Código não encontrado na URL');
-          setError('Link de recuperação inválido ou expirado');
-          return;
-        }
-
-        // Verifica o código de recuperação
-        const { data, error: verifyError } = await supabase.auth.verifyOtp({
-          token_hash: code,
-          type: 'recovery'
-        });
-
-        console.log('Resposta da verificação:', { data, error: verifyError });
-
-        if (verifyError) {
-          console.error('Erro na verificação:', verifyError);
-          setError('Link de recuperação inválido ou expirado');
-          return;
-        }
-
-      } catch (error) {
-        console.error('Erro ao processar recuperação:', error);
-        setError('Erro ao processar link de recuperação');
-      }
-    };
-
-    handlePasswordRecovery();
-  }, [location]);
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError(null);
     setLoading(true);
-
-    const formData = new FormData(e.currentTarget);
-    const password = formData.get('password') as string;
-    const confirmPassword = formData.get('confirmPassword') as string;
-
-    if (password !== confirmPassword) {
-      setError('As senhas não conferem');
-      setLoading(false);
-      return;
-    }
+    setError(null);
 
     try {
-      const { data, error } = await supabase.auth.updateUser({
-        password: password
-      });
+      if (password !== confirmPassword) {
+        throw new Error('As senhas não coincidem');
+      }
 
-      console.log('Resposta da atualização:', { data, error });
-
-      if (error) throw error;
-
-      // Fazer logout após atualizar a senha
-      await supabase.auth.signOut();
+      // TODO: Implementar lógica de atualização de senha
       
-      navigate('/login', { 
-        state: { message: 'Senha atualizada com sucesso! Faça login com sua nova senha.' }
-      });
-    } catch (error: any) {
-      console.error('Erro ao atualizar senha:', error);
-      setError(error.message || 'Erro ao atualizar senha');
+      navigate('/login');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ocorreu um erro ao atualizar a senha');
     } finally {
       setLoading(false);
     }
@@ -144,7 +88,8 @@ export function UpdatePasswordPage() {
             <input
               type="password"
               id="password"
-              name="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
               className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]"
@@ -159,7 +104,8 @@ export function UpdatePasswordPage() {
             <input
               type="password"
               id="confirmPassword"
-              name="confirmPassword"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
               required
               minLength={6}
               className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]"

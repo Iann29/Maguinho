@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Eye, EyeOff } from 'lucide-react';
-import { supabase } from '../lib/supabase';
 
 export function RegistrationPage() {
   const navigate = useNavigate();
@@ -11,6 +10,17 @@ export function RegistrationPage() {
   const [cpf, setCpf] = useState('');
   const [phone, setPhone] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordMatch, setPasswordMatch] = useState(true);
+
+  useEffect(() => {
+    if (confirmPassword) {
+      setPasswordMatch(password === confirmPassword);
+    } else {
+      setPasswordMatch(true);
+    }
+  }, [password, confirmPassword]);
 
   const formatCPF = (value: string) => {
     // Remove tudo que não for número
@@ -48,115 +58,38 @@ export function RegistrationPage() {
     setPhone(formattedPhone);
   };
 
-  const containerVariants = {
-    hidden: { opacity: 0 },
-    visible: {
-      opacity: 1,
-      transition: {
-        staggerChildren: 0.1,
-      },
-    },
-  };
-
-  const itemVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: {
-      opacity: 1,
-      y: 0,
-    },
-  };
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     setLoading(true);
 
-    const formData = new FormData(e.currentTarget);
-    const email = formData.get('email') as string;
-    const password = formData.get('password') as string;
-    const name = formData.get('name') as string;
     const rawCPF = cpf.replace(/\D/g, '');
     // Adiciona +55 e remove formatação do telefone
     const rawPhone = '+55' + phone.replace(/\D/g, '');
 
     try {
-      // Primeiro, verificar se já existe usuário com este email, CPF ou telefone
-      const { data: existingUser, error: checkError } = await supabase
-        .from('users')
-        .select('email, cpf, phone')
-        .or(`email.eq.${email},cpf.eq.${rawCPF},phone.eq.${rawPhone}`);
-
-      if (checkError) throw checkError;
-
-      if (existingUser && existingUser.length > 0) {
-        const user = existingUser[0];
-        if (user.email === email) {
-          throw new Error('Este email já está cadastrado. Por favor, use outro email ou faça login.');
-        }
-        if (user.cpf === rawCPF) {
-          throw new Error('Este CPF já está cadastrado. Se você já tem uma conta, faça login.');
-        }
-        if (user.phone === rawPhone) {
-          throw new Error('Este número de telefone já está cadastrado. Por favor, use outro número.');
-        }
+      // TODO: Implementar validações de usuário existente
+      if (rawCPF.length !== 11) {
+        throw new Error('CPF inválido');
       }
 
-      // Se chegou aqui, podemos criar o usuário
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email,
-        password,
+      if (rawPhone.length !== 14) { // +55 + 11 dígitos
+        throw new Error('Número de telefone inválido');
+      }
+
+      if (password !== confirmPassword) {
+        throw new Error('As senhas não coincidem');
+      }
+
+      // TODO: Implementar criação de usuário
+      
+      navigate('/login', {
+        state: {
+          message: 'Conta criada com sucesso! Por favor, faça login.'
+        }
       });
-
-      if (authError) {
-        if (authError.message.includes('User already registered')) {
-          throw new Error('Este email já está cadastrado. Por favor, use outro email ou faça login.');
-        }
-        throw authError;
-      }
-
-      if (authData.user) {
-        // Criar o usuário na tabela users
-        const { error: userError } = await supabase
-          .from('users')
-          .insert([
-            {
-              id: authData.user.id,
-              name,
-              email,
-              cpf: rawCPF,
-              phone: rawPhone
-            },
-          ]);
-
-        if (userError) {
-          // Caso ocorra algum erro na inserção, vamos deletar o usuário criado no auth
-          await supabase.auth.admin.deleteUser(authData.user.id);
-          
-          if (userError.message.includes('users_email_key')) {
-            throw new Error('Este email já está cadastrado. Por favor, use outro email ou faça login.');
-          }
-          if (userError.message.includes('users_cpf_key')) {
-            throw new Error('Este CPF já está cadastrado. Se você já tem uma conta, faça login.');
-          }
-          if (userError.message.includes('users_phone_key')) {
-            throw new Error('Este número de telefone já está cadastrado. Por favor, use outro número.');
-          }
-          throw userError;
-        }
-
-        // Redirecionar para o login com mensagem sobre confirmação de email
-        navigate('/login', {
-          state: {
-            message: 'Conta criada com sucesso! Por favor, verifique seu email para confirmar sua conta.'
-          }
-        });
-      }
-    } catch (err: any) {
-      if (err.message?.includes('For security purposes')) {
-        setError('Aguarde um momento antes de tentar novamente.');
-      } else {
-        setError(err.message || 'Ocorreu um erro ao criar sua conta.');
-      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Ocorreu um erro ao criar sua conta.');
     } finally {
       setLoading(false);
     }
@@ -165,14 +98,15 @@ export function RegistrationPage() {
   return (
     <motion.div
       className="max-w-7xl mx-auto px-4 min-h-screen flex flex-col items-center justify-center gap-8"
-      initial="hidden"
-      animate="visible"
-      variants={containerVariants}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.5 }}
     >
       <motion.button
         onClick={() => navigate('/login')}
         className="flex items-center gap-2 text-gray-400 hover:text-[#00E7C1] transition-all duration-200 group"
-        variants={itemVariants}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
       >
         <ArrowLeft size={20} className="transition-transform duration-200 group-hover:-translate-x-1" />
         <span>Voltar para o login</span>
@@ -180,11 +114,13 @@ export function RegistrationPage() {
 
       <motion.div
         className="w-full max-w-lg bg-[#1C1E21]/60 backdrop-blur-sm rounded-lg border border-[#2A2D31]/50 p-8"
-        variants={itemVariants}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
       >
         <motion.h2
           className="text-3xl font-bold mb-6 bg-gradient-to-r from-[#00E7C1] to-[#00E7C1]/80 text-transparent bg-clip-text text-center"
-          variants={itemVariants}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
         >
           Criar Conta
         </motion.h2>
@@ -194,13 +130,19 @@ export function RegistrationPage() {
             <motion.div
               className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded"
               initial={{ opacity: 0 }}
-              animate={{ opacity: 1, transition: { duration: 0.3 } }}
+              animate={{ opacity: 1 }}
             >
               {error}
             </motion.div>
           )}
 
-          <motion.div variants={itemVariants}>
+          <motion.div variants={{
+            hidden: { opacity: 0, y: 20 },
+            visible: {
+              opacity: 1,
+              y: 0,
+            },
+          }}>
             <label htmlFor="name" className="block text-sm font-medium text-gray-300 mb-2">
               Nome Completo
             </label>
@@ -214,7 +156,13 @@ export function RegistrationPage() {
             />
           </motion.div>
 
-          <motion.div variants={itemVariants}>
+          <motion.div variants={{
+            hidden: { opacity: 0, y: 20 },
+            visible: {
+              opacity: 1,
+              y: 0,
+            },
+          }}>
             <label htmlFor="email" className="block text-sm font-medium text-gray-300 mb-2">
               Email
             </label>
@@ -228,7 +176,13 @@ export function RegistrationPage() {
             />
           </motion.div>
 
-          <motion.div variants={itemVariants}>
+          <motion.div variants={{
+            hidden: { opacity: 0, y: 20 },
+            visible: {
+              opacity: 1,
+              y: 0,
+            },
+          }}>
             <label htmlFor="cpf" className="block text-sm font-medium text-gray-300 mb-2">
               CPF
             </label>
@@ -245,7 +199,13 @@ export function RegistrationPage() {
             />
           </motion.div>
 
-          <motion.div variants={itemVariants}>
+          <motion.div variants={{
+            hidden: { opacity: 0, y: 20 },
+            visible: {
+              opacity: 1,
+              y: 0,
+            },
+          }}>
             <label htmlFor="phone" className="block text-sm font-medium text-gray-300 mb-2">
               WhatsApp
             </label>
@@ -267,7 +227,7 @@ export function RegistrationPage() {
             </div>
           </motion.div>
 
-          <motion.div variants={itemVariants}>
+          <div>
             <label htmlFor="password" className="block text-sm font-medium text-gray-300 mb-2">
               Senha
             </label>
@@ -277,20 +237,62 @@ export function RegistrationPage() {
                 id="password"
                 name="password"
                 required
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full px-4 py-2.5 bg-[#2A2D31]/50 border border-[#2A2D31] rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]"
                 placeholder="Digite sua senha"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-[#00E7C1] transition-colors"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
               >
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
-          </motion.div>
+          </div>
 
-          <motion.div variants={itemVariants}>
+          <div>
+            <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-300 mb-2">
+              Confirmar Senha
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? "text" : "password"}
+                id="confirmPassword"
+                name="confirmPassword"
+                required
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                className={`w-full px-4 py-2.5 bg-[#2A2D31]/50 border rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 transition-colors ${
+                  !passwordMatch && confirmPassword 
+                    ? 'border-red-500 focus:ring-red-500/50 focus:border-red-500' 
+                    : 'border-[#2A2D31] focus:ring-[#00E7C1]/50 focus:border-[#00E7C1]'
+                }`}
+                placeholder="Confirme sua senha"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white"
+              >
+                {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+              </button>
+            </div>
+            {!passwordMatch && confirmPassword && (
+              <p className="mt-1 text-sm text-red-500">
+                As senhas não coincidem
+              </p>
+            )}
+          </div>
+
+          <motion.div variants={{
+            hidden: { opacity: 0, y: 20 },
+            visible: {
+              opacity: 1,
+              y: 0,
+            },
+          }}>
             <button
               type="submit"
               disabled={loading}
@@ -300,7 +302,13 @@ export function RegistrationPage() {
             </button>
           </motion.div>
 
-          <motion.p className="text-center text-sm text-gray-500" variants={itemVariants}>
+          <motion.p className="text-center text-sm text-gray-500" variants={{
+            hidden: { opacity: 0, y: 20 },
+            visible: {
+              opacity: 1,
+              y: 0,
+            },
+          }}>
             Já tem uma conta?{' '}
             <button
               type="button"

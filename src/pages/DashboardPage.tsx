@@ -1,97 +1,59 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import { LogOut, UserX } from 'lucide-react';
-import { supabase } from '../lib/supabase';
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { LogOut, UserX } from "lucide-react";
 
 export function DashboardPage() {
-  const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    // Verifica se o usuário está autenticado e se ainda existe na tabela users
-    const checkUser = async () => {
+    const checkAuth = async () => {
       try {
-        const { data: { user } } = await supabase.auth.getUser();
+        // TODO: Implementar verificação de autenticação
+        const isAuthenticated = false; // Temporário
+        if (!isAuthenticated) {
+          navigate('/login');
+          return;
+        }
         
-        if (!user) {
-          navigate('/login');
-          return;
-        }
-
-        // Verifica se o usuário ainda existe na tabela users
-        const { data: userData, error: userError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', user.id)
-          .single();
-
-        if (userError || !userData) {
-          // Se não encontrar o usuário na tabela, faz logout e redireciona
-          await supabase.auth.signOut();
-          navigate('/login');
-          return;
-        }
-
-        setUser(userData);
+        // TODO: Buscar dados do usuário
+        setUser(null);
       } catch (error) {
-        console.error('Erro ao verificar usuário:', error);
+        console.error('Erro ao verificar autenticação:', error);
         navigate('/login');
       } finally {
         setLoading(false);
       }
     };
 
-    checkUser();
+    checkAuth();
   }, [navigate]);
 
   const handleLogout = async () => {
-    setLoading(true);
     try {
-      await supabase.auth.signOut();
+      // TODO: Implementar lógica de logout
       navigate('/login');
     } catch (error) {
-      console.error('Erro ao deslogar:', error);
-    } finally {
-      setLoading(false);
+      console.error('Erro ao fazer logout:', error);
     }
   };
 
   const handleDeleteAccount = async () => {
-    if (!window.confirm('Tem certeza que deseja excluir sua conta? Esta ação não pode ser desfeita.')) {
-      return;
-    }
-
-    setLoading(true);
     try {
-      const response = await fetch('/api/delete-user', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ userId: user.id }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Erro ao excluir conta');
-      }
-
-      await supabase.auth.signOut();
-      navigate('/login', { state: { message: 'Sua conta foi excluída com sucesso.' } });
-    } catch (error: any) {
-      console.error('Erro ao excluir conta:', error);
-      alert('Erro ao excluir conta. Por favor, tente novamente.');
-    } finally {
-      setLoading(false);
+      // TODO: Implementar lógica de deleção de conta
+      navigate('/login');
+    } catch (error) {
+      console.error('Erro ao deletar conta:', error);
     }
   };
 
-  // Mostra um loading ou nada enquanto verifica o usuário
-  if (loading || !user) {
-    return null;
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#0C0D0F] flex items-center justify-center">
+        <div className="text-[#00E7C1] text-lg">Carregando...</div>
+      </div>
+    );
   }
 
   return (
@@ -111,7 +73,6 @@ export function DashboardPage() {
             <div className="flex items-center gap-4">
               <button
                 onClick={handleDeleteAccount}
-                disabled={loading}
                 className="flex items-center gap-2 px-4 py-2 text-red-500 hover:bg-red-500/10 rounded-lg transition-colors"
               >
                 <UserX size={20} />
@@ -119,7 +80,6 @@ export function DashboardPage() {
               </button>
               <button
                 onClick={handleLogout}
-                disabled={loading}
                 className="flex items-center gap-2 px-4 py-2 text-[#00E7C1] hover:bg-[#00E7C1]/10 rounded-lg transition-colors"
               >
                 <LogOut size={20} />
@@ -134,7 +94,7 @@ export function DashboardPage() {
         <div className="bg-[#2A2D31]/60 backdrop-blur-sm border border-[#2A2D31] rounded-lg p-6">
           <h2 className="text-xl font-semibold text-white mb-4">Bem-vindo!</h2>
           <p className="text-gray-400">
-            Email: {user.email}
+            Email: {user?.email}
           </p>
         </div>
       </main>
