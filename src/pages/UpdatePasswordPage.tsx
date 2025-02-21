@@ -9,42 +9,48 @@ export function UpdatePasswordPage() {
   const location = useLocation();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isValidSession, setIsValidSession] = useState(false);
 
   useEffect(() => {
-    const checkSession = async () => {
+    const handlePasswordRecovery = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (error) {
-          console.error('Erro ao verificar sessão:', error);
-          setError('Erro ao verificar link de recuperação');
-          return;
-        }
+        // Pega o hash da URL
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const type = hashParams.get('type');
 
-        if (!session) {
-          console.error('Sessão não encontrada');
+        console.log('Hash params:', { accessToken, refreshToken, type });
+
+        if (!accessToken || !type) {
+          console.error('Parâmetros de autenticação não encontrados');
           setError('Link de recuperação inválido ou expirado');
           return;
         }
 
-        setIsValidSession(true);
+        // Se tivermos os tokens, vamos tentar estabelecer a sessão
+        const { data, error: sessionError } = await supabase.auth.setSession({
+          access_token: accessToken,
+          refresh_token: refreshToken || ''
+        });
+
+        if (sessionError) {
+          console.error('Erro ao estabelecer sessão:', sessionError);
+          setError('Erro ao verificar link de recuperação');
+          return;
+        }
+
+        console.log('Sessão estabelecida:', data);
       } catch (error) {
-        console.error('Erro ao verificar sessão:', error);
-        setError('Erro ao verificar link de recuperação');
+        console.error('Erro ao processar recuperação:', error);
+        setError('Erro ao processar link de recuperação');
       }
     };
 
-    checkSession();
+    handlePasswordRecovery();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!isValidSession) {
-      setError('Link de recuperação inválido ou expirado');
-      return;
-    }
-
     setError(null);
     setLoading(true);
 
@@ -59,9 +65,11 @@ export function UpdatePasswordPage() {
     }
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { data, error } = await supabase.auth.updateUser({
         password: password
       });
+
+      console.log('Resposta da atualização:', { data, error });
 
       if (error) throw error;
 
