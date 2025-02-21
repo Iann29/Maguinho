@@ -119,11 +119,54 @@ export function DashboardPage() {
   };
 
   const handleDeleteAccount = async () => {
+    // Confirmação do usuário
+    const confirmar = window.confirm(
+      'Tem certeza que deseja excluir sua conta? Esta ação não pode ser desfeita.'
+    );
+
+    if (!confirmar) {
+      return;
+    }
+
     try {
-      // TODO: Implementar lógica de deleção de conta
-      navigate('/login');
+      const { data: { user }, error: getUserError } = await supabase.auth.getUser();
+      if (getUserError || !user) {
+        console.error('Usuário não encontrado ou não autenticado:', getUserError);
+        navigate('/login');
+        return;
+      }
+
+      // 1) Remove registro na tabela 'users'
+      const { error: deleteTableError } = await supabase
+        .from('users')
+        .delete()
+        .eq('id', user.id);
+
+      if (deleteTableError) {
+        console.error('Erro ao deletar na tabela users:', deleteTableError.message);
+        alert('Erro ao excluir dados do usuário. Por favor, tente novamente.');
+        return;
+      }
+
+      // 2) Remove da Auth (requer service role ou function)
+      const { error: deleteAuthError } = await supabase.auth.admin.deleteUser(user.id);
+      if (deleteAuthError) {
+        console.error('Erro ao deletar usuário no Auth:', deleteAuthError.message);
+        alert('Erro ao excluir conta. Por favor, contate o suporte.');
+        return;
+      }
+
+      // 3) Efetua signOut local e redireciona
+      console.log('Conta excluída com sucesso. Até logo!');
+      await supabase.auth.signOut();
+      navigate('/login', {
+        state: {
+          message: 'Sua conta foi excluída com sucesso.'
+        }
+      });
     } catch (error) {
-      console.error('Erro ao deletar conta:', error);
+      console.error('Erro inesperado ao deletar conta:', error);
+      alert('Ocorreu um erro inesperado. Por favor, tente novamente.');
     }
   };
 
