@@ -8,12 +8,12 @@ serve(async (req) => {
     'Access-Control-Allow-Headers': 'authorization, content-type'
   };
 
-  // Se for uma requisição OPTIONS (preflight), responda imediatamente
+  // Responde a requisições OPTIONS (preflight)
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders });
   }
 
-  // Se o método não for POST, retorne 405 Method Not Allowed
+  // Verifica se o método é POST
   if (req.method !== 'POST') {
     return new Response(
       JSON.stringify({ error: 'Método não permitido' }),
@@ -24,6 +24,8 @@ serve(async (req) => {
   try {
     // Pega o token de autorização
     const authHeader = req.headers.get('Authorization');
+    console.log('Token recebido:', authHeader);
+    
     if (!authHeader) {
       return new Response(
         JSON.stringify({ error: 'Token não fornecido' }),
@@ -31,7 +33,9 @@ serve(async (req) => {
       );
     }
 
-    // Cria cliente Supabase com service role
+    const token = authHeader.replace('Bearer ', '');
+
+    // Cria cliente Supabase com a chave de serviço
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
@@ -40,21 +44,11 @@ serve(async (req) => {
       }
     );
 
-    // Cria cliente Supabase com token do usuário
-    const supabaseClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false,
-          headers: { Authorization: authHeader }
-        }
-      }
-    );
-
-    // Verifica o usuário atual
-    const { data: { user }, error: getUserError } = await supabaseClient.auth.getUser();
+    // Verifica o usuário com o token usando o cliente admin
+    const { data: { user }, error: getUserError } = await supabaseAdmin.auth.getUser(token);
+    console.log('Erro ao verificar usuário:', getUserError?.message);
+    console.log('Usuário:', user);
+    
     if (getUserError || !user) {
       return new Response(
         JSON.stringify({ error: 'Usuário não autorizado' }),
