@@ -11,34 +11,47 @@ export function UpdatePasswordPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Pega o código da URL, seja dos parâmetros ou do query string
-    const code = new URLSearchParams(location.search).get('code');
-    
-    if (!code) {
-      navigate('/login');
-      return;
-    }
-
-    // Verifica se o código é válido
-    const verifyCode = async () => {
+    const checkRecoveryCode = async () => {
       try {
-        const { error } = await supabase.auth.verifyOtp({
-          token_hash: code,
+        // Tenta pegar o código de várias formas possíveis
+        const params = new URLSearchParams(location.search);
+        const codeFromQuery = params.get('code');
+        const codeFromHash = location.hash.replace('#', '');
+        const codeToUse = codeFromQuery || codeFromHash;
+
+        console.log('URL completa:', window.location.href);
+        console.log('Código da query:', codeFromQuery);
+        console.log('Código do hash:', codeFromHash);
+        console.log('Código que será usado:', codeToUse);
+
+        if (!codeToUse) {
+          console.error('Nenhum código encontrado na URL');
+          setError('Link de recuperação inválido');
+          return;
+        }
+
+        // Tenta verificar o código
+        const { data, error: verifyError } = await supabase.auth.verifyOtp({
+          token_hash: codeToUse,
           type: 'recovery'
         });
 
-        if (error) {
-          console.error('Erro ao verificar código:', error);
-          navigate('/login');
+        console.log('Resposta da verificação:', { data, error: verifyError });
+
+        if (verifyError) {
+          console.error('Erro na verificação:', verifyError);
+          setError('Link de recuperação inválido ou expirado');
+          return;
         }
+
       } catch (error) {
-        console.error('Erro ao verificar código:', error);
-        navigate('/login');
+        console.error('Erro ao processar código de recuperação:', error);
+        setError('Erro ao processar o link de recuperação');
       }
     };
 
-    verifyCode();
-  }, [navigate, location]);
+    checkRecoveryCode();
+  }, [location]);
 
   const containerVariants = {
     hidden: {},
@@ -70,9 +83,11 @@ export function UpdatePasswordPage() {
     }
 
     try {
-      const { error } = await supabase.auth.updateUser({
+      const { data, error } = await supabase.auth.updateUser({
         password: password
       });
+
+      console.log('Resposta da atualização:', { data, error });
 
       if (error) throw error;
 
