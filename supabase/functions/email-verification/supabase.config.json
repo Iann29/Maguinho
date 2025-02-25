@@ -5,7 +5,7 @@
     "maxDuration": 10,
     "cors": {
       "allow_origin": ["*"],
-      "allow_methods": ["POST", "OPTIONS"],
-      "allow_headers": ["Authorization", "Content-Type"]
+      "allow_methods": ["POST", "GET", "OPTIONS"],
+      "allow_headers": ["Authorization", "Content-Type", "x-client-info", "apikey"]
     }
   }
