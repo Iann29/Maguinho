@@ -48,6 +48,28 @@
 6. O webhook processa a notificação e atualiza o status da tentativa de pagamento
 7. Se o pagamento for aprovado, a aplicação cria uma nova assinatura na tabela `subscriptions`
 
+## Atualização da Assinatura Secreta do Webhook
+
+A assinatura secreta gerada pelo Mercado Pago para o webhook é:
+
+```
+4f4cdb697583ccb7d156f0513f8b6b27a5a7da8ea009c6c584c39e5bc146a3bb
+```
+
+Para configurar esta assinatura secreta, você precisa:
+
+1. Atualizar o arquivo `.env.local` com a nova assinatura:
+   ```
+   MP_WEBHOOK_SECRET=4f4cdb697583ccb7d156f0513f8b6b27a5a7da8ea009c6c584c39e5bc146a3bb
+   ```
+
+2. Atualizar as variáveis de ambiente da Edge Function no Supabase:
+   - Acesse o [Painel de Controle do Supabase](https://supabase.com/dashboard/project/zssitwbdprfnqglttwhs)
+   - Vá para a seção "Edge Functions"
+   - Selecione a função `payment-webhook`
+   - Clique em "Variáveis de Ambiente"
+   - Adicione ou atualize a variável `MP_WEBHOOK_SECRET` com o valor acima
+
 ## URLs das Edge Functions
 
 - `create-payment-preference`: https://zssitwbdprfnqglttwhs.functions.supabase.co/create-payment-preference

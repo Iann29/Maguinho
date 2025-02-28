@@ -1,6 +1,14 @@
 {
   "rewrites": [
     {
+      "source": "/api/create-payment-preference",
+      "destination": "https://zssitwbdprfnqglttwhs.functions.supabase.co/create-payment-preference"
+    },
+    {
+      "source": "/api/payment-webhook",
+      "destination": "https://zssitwbdprfnqglttwhs.functions.supabase.co/payment-webhook"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

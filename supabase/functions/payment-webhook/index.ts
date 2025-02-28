@@ -28,9 +28,15 @@ serve(async (req) => {
     // Verificar a assinatura do webhook (opcional, mas recomendado para segurança)
     const webhookSignature = req.headers.get('X-Signature')
     if (MP_WEBHOOK_SECRET && webhookSignature) {
-      // Implementar verificação de assinatura aqui
-      // Este é um exemplo básico, você deve implementar a verificação correta
-      // conforme a documentação do Mercado Pago
+      // Verificação básica da assinatura - em produção, você deve implementar
+      // a verificação completa conforme a documentação do Mercado Pago
+      if (webhookSignature !== MP_WEBHOOK_SECRET) {
+        console.error('Assinatura do webhook inválida');
+        return new Response(JSON.stringify({ error: 'Assinatura inválida' }), {
+          status: 401,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     // Obter dados do corpo da requisição
