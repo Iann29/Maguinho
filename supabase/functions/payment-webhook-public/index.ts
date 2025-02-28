@@ -75,6 +75,62 @@ async function getValidToken() {
   return token;
 }
 
+// Obter detalhes completos do pagamento do Mercado Pago
+async function getPaymentDetails(paymentId: string, accessToken: string): Promise<any> {
+  console.log(`Obtendo detalhes do pagamento ${paymentId} do Mercado Pago...`);
+  
+  try {
+    const response = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Erro ao obter detalhes do pagamento:', errorData);
+      throw new Error(`Erro ao obter detalhes do pagamento: ${errorData.message || response.statusText}`);
+    }
+    
+    const paymentData = await response.json();
+    console.log('Detalhes do pagamento obtidos com sucesso');
+    return paymentData;
+  } catch (error) {
+    console.error('Erro ao obter detalhes do pagamento:', error);
+    throw error;
+  }
+}
+
+// Obter detalhes da assinatura (preapproval) do Mercado Pago
+async function getSubscriptionDetails(subscriptionId: string, accessToken: string): Promise<any> {
+  console.log(`Obtendo detalhes da assinatura ${subscriptionId} do Mercado Pago...`);
+  
+  try {
+    const response = await fetch(`https://api.mercadopago.com/preapproval/${subscriptionId}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    });
+    
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Erro ao obter detalhes da assinatura:', errorData);
+      throw new Error(`Erro ao obter detalhes da assinatura: ${errorData.message || response.statusText}`);
+    }
+    
+    const subscriptionData = await response.json();
+    console.log('Detalhes da assinatura obtidos com sucesso');
+    return subscriptionData;
+  } catch (error) {
+    console.error('Erro ao obter detalhes da assinatura:', error);
+    throw error;
+  }
+}
+
 serve(async (req) => {
   // Lidar com requisições OPTIONS para CORS
   if (req.method === 'OPTIONS') {
@@ -188,7 +244,7 @@ serve(async (req) => {
         console.log('ID de pagamento de teste não encontrado na API, mas retornando sucesso.');
         return new Response(JSON.stringify({ 
           success: true, 
-          message: 'Notificação de teste recebida com sucesso.',
+          message: 'Pagamento de teste detectado. Notificação recebida com sucesso.',
           test_mode: true
         }), {
           status: 200,
@@ -206,7 +262,7 @@ serve(async (req) => {
     console.log('Detalhes do pagamento recebidos:', JSON.stringify(paymentDetails));
     
     // Processar o pagamento com os detalhes completos
-    return await processPayment(paymentDetails);
+    return await processPayment(paymentDetails.id);
 
   } catch (error) {
     console.error('Erro ao processar webhook:', error)
@@ -219,38 +275,88 @@ serve(async (req) => {
 })
 
 // Função para processar o pagamento e atualizar o banco de dados
-async function processPayment(payment) {
-  console.log('Processando pagamento:', JSON.stringify(payment))
+async function processPayment(paymentId: string): Promise<void> {
+  console.log('Processando pagamento:', paymentId);
+  
+  // Obter um token válido para o Mercado Pago
+  const accessToken = await getValidToken();
+  
+  // Obter detalhes completos do pagamento
+  const paymentDetails = await getPaymentDetails(paymentId, accessToken);
+  console.log('Detalhes do pagamento:', JSON.stringify(paymentDetails).substring(0, 200) + '...');
+  
+  // Extrair informações relevantes do pagamento
+  const payment = {
+    id: paymentDetails.id,
+    status: paymentDetails.status,
+    status_detail: paymentDetails.status_detail,
+    external_reference: paymentDetails.external_reference,
+    payment_method_id: paymentDetails.payment_method_id,
+    payment_type_id: paymentDetails.payment_type_id,
+    transaction_amount: paymentDetails.transaction_amount,
+    date_created: paymentDetails.date_created,
+    date_approved: paymentDetails.date_approved,
+    payer: paymentDetails.payer,
+    metadata: paymentDetails.metadata || {},
+    preapproval_id: paymentDetails.preapproval_id || null,
+    subscription_id: paymentDetails.id  // Usar o ID do pagamento como subscription_id
+  };
 
+  // Extrair informações dos metadados
+  const metadata = payment.metadata || {};
+  console.log('- metadata completo:', JSON.stringify(metadata));
+  
+  const userId = metadata.user_id || payment.external_reference;
+  const planId = metadata.plan_id;
+  const planInterval = metadata.plan_interval || 'mensal';
+  
+  console.log('- user_id:', userId);
+  console.log('- plan_id:', planId);
+  console.log('- plan_interval:', planInterval);
+  
+  // Extrair nome do plano dos metadados ou da descrição do pagamento
+  let planName = null;
+  
+  // Verificar se o plan_id contém informações sobre o nome do plano
+  if (planId) {
+    if (planId.toLowerCase().includes('premium')) {
+      planName = 'Plano Premium';
+      console.log('Nome do plano extraído do plan_id: Plano Premium');
+    } else if (planId.toLowerCase().includes('basico')) {
+      planName = 'Plano Básico';
+      console.log('Nome do plano extraído do plan_id: Plano Básico');
+    }
+  }
+  
+  // Verificar se há informações na descrição do pagamento
+  if (!planName && paymentDetails.description) {
+    if (paymentDetails.description.toLowerCase().includes('premium')) {
+      planName = 'Plano Premium';
+      console.log('Nome do plano extraído da descrição: Plano Premium');
+    } else if (paymentDetails.description.toLowerCase().includes('básico') || paymentDetails.description.toLowerCase().includes('basico')) {
+      planName = 'Plano Básico';
+      console.log('Nome do plano extraído da descrição: Plano Básico');
+    }
+  }
+  
   // Criar cliente Supabase
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
   try {
-    // Extrair informações do pagamento
-    const paymentId = payment.id.toString();
-    const paymentStatus = payment.status;
-    const paymentAmount = payment.transaction_amount || payment.transaction_details?.total_paid_amount;
-    const paymentMethod = payment.payment_method_id || payment.payment_type_id;
-    
-    // Verificar se temos metadados no pagamento (campos personalizados)
-    const userId = payment.metadata?.user_id || payment.external_reference;
-    const planId = payment.metadata?.plan_id;
-    const planInterval = payment.metadata?.plan_interval;
-
     console.log('Dados extraídos do pagamento:');
-    console.log('- ID:', paymentId);
-    console.log('- Status:', paymentStatus);
-    console.log('- Valor:', paymentAmount);
-    console.log('- Método:', paymentMethod);
+    console.log('- ID:', payment.id);
+    console.log('- Status:', payment.status);
+    console.log('- Valor:', payment.transaction_amount);
+    console.log('- Método:', payment.payment_method_id);
     console.log('- user_id:', userId);
     console.log('- plan_id:', planId);
     console.log('- plan_interval:', planInterval);
-    console.log('- live_mode:', payment.live_mode);
+    console.log('- live_mode:', paymentDetails.live_mode);
     console.log('- metadata completo:', JSON.stringify(payment.metadata));
     console.log('- external_reference:', payment.external_reference);
     
     // Verificar se é um pagamento de teste (ID 123456 ou live_mode=false)
-    const isTestPayment = paymentId === '123456' || (payment.live_mode !== undefined && payment.live_mode === false);
+    const isTestPayment = paymentId === '123456' || (paymentDetails.live_mode !== undefined && paymentDetails.live_mode === false);
     
     if (!userId) {
       console.error('ID de usuário não encontrado no pagamento');
@@ -270,13 +376,23 @@ async function processPayment(payment) {
       throw new Error('ID de usuário não encontrado no pagamento');
     }
 
-    // Buscar a tentativa de pagamento usando user_id
-    console.log('Buscando tentativa de pagamento no banco de dados usando user_id...');
+    // Buscar a tentativa de pagamento usando user_id e preference_id (se disponível)
+    console.log('Buscando tentativa de pagamento no banco de dados...');
     
-    const { data: attemptData, error: attemptError } = await supabase
+    let attemptQuery = supabase
       .from('payment_attempts')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', userId);
+      
+    // Se tivermos uma referência externa, usar como critério adicional
+    if (payment.external_reference) {
+      console.log('Usando external_reference como critério adicional:', payment.external_reference);
+      // Tentar buscar pela preference_id que deve corresponder ao external_reference
+      attemptQuery = attemptQuery.eq('preference_id', payment.external_reference);
+    }
+    
+    // Ordenar por data de criação (mais recente primeiro) e pegar a primeira
+    const { data: attemptData, error: attemptError } = await attemptQuery
       .order('created_at', { ascending: false })
       .limit(1);
 
@@ -288,18 +404,52 @@ async function processPayment(payment) {
     if (!attemptData || attemptData.length === 0) {
       console.log('Tentativa de pagamento não encontrada para o usuário:', userId)
       
+      // Se o pagamento foi aprovado, atualizar todas as tentativas pendentes deste usuário
+      if (payment.status === 'approved') {
+        console.log('Atualizando todas as tentativas pendentes do usuário...');
+        
+        const { data: updatedAttempts, error: updateAttemptsError } = await supabase
+          .from('payment_attempts')
+          .update({ 
+            status: 'cancelled', 
+            updated_at: new Date().toISOString() 
+          })
+          .eq('user_id', userId)
+          .eq('status', 'pending')
+          .select();
+          
+        if (updateAttemptsError) {
+          console.error('Erro ao atualizar tentativas pendentes:', updateAttemptsError);
+          // Não interromper o fluxo por erro nesta atualização
+        } else {
+          console.log(`${updatedAttempts?.length || 0} tentativas pendentes atualizadas com sucesso`);
+        }
+      }
+      
       // Se não encontramos a tentativa, vamos criar um registro diretamente
       if (planId && planInterval) {
         console.log('Criando registro de pagamento diretamente dos metadados...');
         
         // Obter o plano
-        const { data: planData, error: planError } = await supabase
+        let planQuery = supabase
           .from('plans')
           .select('*')
-          .eq('billing_interval', planInterval)
-          .eq('active', true)
-          .limit(1);
+          .eq('active', true);
           
+        // Se o plan_id parece ser um nome de plano (não um UUID), buscar pelo nome também
+        if (planId && !planId.includes('-')) {
+          // Extrair o nome do plano do plan_id (ex: "plano_premium_mensal" -> "premium")
+          const planNameFromId = planId.replace('plano_', '').replace('_mensal', '').replace('_anual', '');
+          console.log(`Buscando plano pelo nome extraído: ${planNameFromId}`);
+          
+          planQuery = planQuery.ilike('name', `%${planNameFromId}%`);
+        }
+        
+        // Adicionar filtro de intervalo
+        planQuery = planQuery.eq('billing_interval', planInterval).limit(1);
+        
+        const { data: planData, error: planError } = await planQuery;
+        
         if (planError) {
           console.error('Erro ao buscar plano:', planError)
           throw new Error(`Erro ao buscar plano: ${planError.message}`)
@@ -316,27 +466,82 @@ async function processPayment(payment) {
         return await createPaymentRecord(supabase, payment, {
           user_id: userId,
           plan_id: plano.id,
-          plan_name: plano.name,
-          plan_price: paymentAmount,
+          plan_name: planName || plano.name, // Usar o nome extraído dos metadados se disponível
+          plan_price: payment.transaction_amount,
           plan_interval: planInterval
         })
       } else {
         // Tentar criar um registro básico mesmo sem os metadados completos
         console.log('Tentando criar registro básico sem metadados completos...');
         
+        // Verificar se o usuário já tem uma assinatura que possamos usar
+        const { data: existingSubscription, error: existingSubscriptionError } = await supabase
+          .from('subscriptions')
+          .select('id')
+          .eq('user_id', userId)
+          .eq('status', 'active')
+          .order('created_at', { ascending: false })
+          .limit(1);
+          
+        let subscriptionId = null;
+        
+        if (!existingSubscriptionError && existingSubscription && existingSubscription.length > 0) {
+          // Usar a assinatura existente
+          subscriptionId = existingSubscription[0].id;
+          console.log(`Usando assinatura existente (ID: ${subscriptionId}) para o pagamento sem metadados completos`);
+        } else {
+          // Criar uma assinatura básica
+          console.log('Criando assinatura básica para o pagamento sem metadados completos...');
+          
+          // Buscar um plano ativo para usar
+          const { data: anyPlan, error: anyPlanError } = await supabase
+            .from('plans')
+            .select('id')
+            .eq('active', true)
+            .limit(1);
+            
+          if (!anyPlanError && anyPlan && anyPlan.length > 0) {
+            const startDate = new Date();
+            let endDate = new Date(startDate);
+            endDate.setMonth(endDate.getMonth() + 1); // Assumir mensal por padrão
+            
+            const { data: newSubscription, error: newSubscriptionError } = await supabase
+              .from('subscriptions')
+              .insert({
+                user_id: userId,
+                plan_id: anyPlan[0].id,
+                status: 'active',
+                start_date: startDate.toISOString(),
+                end_date: endDate.toISOString(),
+                subscription_id: paymentId
+              })
+              .select();
+              
+            if (!newSubscriptionError && newSubscription && newSubscription.length > 0) {
+              subscriptionId = newSubscription[0].id;
+              console.log(`Nova assinatura básica criada (ID: ${subscriptionId})`);
+            } else {
+              console.error('Erro ao criar assinatura básica:', newSubscriptionError);
+            }
+          } else {
+            console.error('Nenhum plano ativo encontrado para criar assinatura básica');
+          }
+        }
+        
         // Criar registro de pagamento simples
         const { data: paymentData, error: paymentError } = await supabase
           .from('payments')
           .insert({
             user_id: userId,
-            amount: paymentAmount,
+            amount: payment.transaction_amount,
             currency: 'BRL',
-            payment_method: paymentMethod,
+            payment_method: payment.payment_method_id,
             transaction_id: paymentId,
-            status: 'approved'
+            status: 'approved',
+            subscription_id: subscriptionId // Usar o ID da assinatura criada ou existente
           })
           .select();
-
+        
         if (paymentError) {
           console.error('Erro ao criar registro de pagamento básico:', paymentError);
           throw new Error(`Erro ao criar registro de pagamento básico: ${paymentError.message}`);
@@ -355,8 +560,8 @@ async function processPayment(payment) {
           .insert({
             user_id: userId,
             action: 'payment_processed',
-            description: 'Pagamento recebido via webhook (sem metadados completos)',
-            data: { payment_id: paymentId, amount: paymentAmount }
+            description: `Pagamento recebido via webhook (sem metadados completos)`,
+            data: { payment_id: paymentId, amount: payment.transaction_amount }
           });
         
         return new Response(JSON.stringify({ 
@@ -372,10 +577,10 @@ async function processPayment(payment) {
 
     console.log('Tentativa de pagamento encontrada:', JSON.stringify(attemptData[0]));
 
-    // Atualizar o status da tentativa de pagamento
+    // Atualizar o status da tentativa de pagamento atual
     const { error: updateError } = await supabase
       .from('payment_attempts')
-      .update({ status: paymentStatus, updated_at: new Date().toISOString() })
+      .update({ status: payment.status, updated_at: new Date().toISOString() })
       .eq('id', attemptData[0].id)
 
     if (updateError) {
@@ -384,14 +589,35 @@ async function processPayment(payment) {
     }
 
     console.log('Tentativa de pagamento atualizada com sucesso');
-
-    // Se o pagamento foi aprovado, criar um registro na tabela payments e atualizar ou criar assinatura
-    if (paymentStatus === 'approved') {
+    
+    // Se o pagamento foi aprovado, atualizar todas as outras tentativas pendentes deste usuário
+    if (payment.status === 'approved') {
+      console.log('Atualizando outras tentativas pendentes do usuário...');
+      
+      // Atualizar todas as tentativas pendentes do usuário, exceto a atual
+      const { data: updatedAttempts, error: updateOtherAttemptsError } = await supabase
+        .from('payment_attempts')
+        .update({ 
+          status: 'cancelled', 
+          updated_at: new Date().toISOString() 
+        })
+        .eq('user_id', attemptData[0].user_id)
+        .eq('status', 'pending')
+        .neq('id', attemptData[0].id)
+        .select();
+        
+      if (updateOtherAttemptsError) {
+        console.error('Erro ao atualizar outras tentativas pendentes:', updateOtherAttemptsError);
+        // Não interromper o fluxo por erro nesta atualização
+      } else {
+        console.log(`${updatedAttempts?.length || 0} outras tentativas pendentes atualizadas com sucesso`);
+      }
+      
       return await createPaymentRecord(supabase, payment, attemptData[0])
     }
 
     // Retornar uma resposta de sucesso
-    return new Response(JSON.stringify({ success: true, status: paymentStatus }), {
+    return new Response(JSON.stringify({ success: true, status: payment.status }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
@@ -408,47 +634,39 @@ async function processPayment(payment) {
 // Função auxiliar para criar registros de pagamento
 async function createPaymentRecord(supabase, payment, attemptData) {
   console.log('Pagamento aprovado, criando registro na tabela payments');
-      
-  // Criar um registro de pagamento
-  const { data: paymentData, error: paymentError } = await supabase
-    .from('payments')
-    .insert({
-      user_id: attemptData.user_id,
-      amount: payment.transaction_amount || payment.transaction_details?.total_paid_amount,
-      currency: 'BRL',
-      payment_method: payment.payment_method_id || payment.payment_type_id,
-      transaction_id: payment.id.toString(),
-      status: 'approved'
-    })
-    .select();
-
-  if (paymentError) {
-    console.error('Erro ao criar registro de pagamento:', paymentError)
-    throw new Error(`Erro ao criar registro de pagamento: ${paymentError.message}`)
-  }
-
-  if (!paymentData || paymentData.length === 0) {
-    console.error('Registro de pagamento criado, mas não foi possível recuperar os dados');
-    throw new Error('Erro ao recuperar dados do pagamento criado');
-  }
-
-  console.log('Registro de pagamento criado:', JSON.stringify(paymentData[0]));
-
+  
+  // Primeiro, vamos criar ou atualizar a assinatura para obter o ID
+  let subscriptionId = null;
+  
   // Verificar se o usuário já tem uma assinatura ativa para esse plano
   console.log('Verificando assinatura existente...');
   
-  // Primeiro, vamos obter o plano correto pelo intervalo
+  // Buscar plano pelo ID ou pelo intervalo
   let planId = attemptData.plan_id;
   
-  // Se o plan_id não é um UUID válido, buscar o plano pelo intervalo
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(planId)) {
-    console.log('ID do plano não é um UUID válido, buscando pelo intervalo...');
-    const { data: planData, error: planError } = await supabase
+  if (!planId) {
+    console.log('Plan ID não encontrado na tentativa, buscando pelo intervalo:', attemptData.plan_interval);
+    
+    // Obter o plano
+    let planQuery = supabase
       .from('plans')
       .select('id')
-      .eq('billing_interval', attemptData.plan_interval)
-      .eq('active', true)
-      .limit(1);
+      .eq('active', true);
+      
+    // Se temos um plan_id nos metadados da tentativa, verificar se é um nome de plano
+    const attemptPlanId = attemptData.plan_id;
+    if (attemptPlanId && !attemptPlanId.includes('-')) {
+      // Extrair o nome do plano do plan_id (ex: "plano_premium_mensal" -> "premium")
+      const planNameFromId = attemptPlanId.replace('plano_', '').replace('_mensal', '').replace('_anual', '');
+      console.log(`Buscando plano pelo nome extraído: ${planNameFromId}`);
+      
+      planQuery = planQuery.ilike('name', `%${planNameFromId}%`);
+    }
+    
+    // Adicionar filtro de intervalo
+    planQuery = planQuery.eq('billing_interval', attemptData.plan_interval).limit(1);
+    
+    const { data: planData, error: planError } = await planQuery;
       
     if (planError) {
       console.error('Erro ao buscar plano pelo intervalo:', planError);
@@ -456,8 +674,8 @@ async function createPaymentRecord(supabase, payment, attemptData) {
     }
     
     if (planData && planData.length > 0) {
-      console.log('Plano encontrado pelo intervalo:', planData[0].id);
       planId = planData[0].id;
+      console.log('Plano encontrado pelo intervalo:', planId);
     } else {
       console.error('Nenhum plano encontrado para o intervalo:', attemptData.plan_interval);
       throw new Error('Nenhum plano encontrado para o intervalo especificado');
@@ -468,15 +686,15 @@ async function createPaymentRecord(supabase, payment, attemptData) {
     .from('subscriptions')
     .select('*')
     .eq('user_id', attemptData.user_id)
-    .eq('plan_id', planId)
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1);
-
+    
   if (subscriptionError) {
-    console.error('Erro ao buscar assinatura:', subscriptionError)
-    throw new Error(`Erro ao buscar assinatura: ${subscriptionError.message}`)
+    console.error('Erro ao verificar assinatura existente:', subscriptionError);
+    throw new Error(`Erro ao verificar assinatura existente: ${subscriptionError.message}`);
   }
-
+  
   // Calcular a data de término com base no intervalo do plano
   const startDate = new Date()
   let endDate = new Date(startDate)
@@ -493,55 +711,204 @@ async function createPaymentRecord(supabase, payment, attemptData) {
 
   // Se já existe uma assinatura, atualizar, senão criar uma nova
   if (subscriptionData && subscriptionData.length > 0) {
-    console.log('Assinatura existente encontrada, atualizando...');
-    const { error: updateSubscriptionError } = await supabase
+    console.log(`Assinatura existente encontrada (ID: ${subscriptionData[0].id}), atualizando...`);
+    const { data: updatedSubscription, error: updateSubscriptionError } = await supabase
       .from('subscriptions')
       .update({
         status: 'active',
         end_date: endDate.toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        plan_id: planId  // Atualizar o plano se necessário
       })
       .eq('id', subscriptionData[0].id)
+      .select();
 
     if (updateSubscriptionError) {
       console.error('Erro ao atualizar assinatura:', updateSubscriptionError)
       throw new Error(`Erro ao atualizar assinatura: ${updateSubscriptionError.message}`)
     }
     
-    console.log('Assinatura atualizada com sucesso');
+    console.log(`Assinatura atualizada com sucesso (ID: ${subscriptionData[0].id})`);
+    subscriptionId = subscriptionData[0].id;
   } else {
-    console.log('Criando nova assinatura...');
-    const { error: createSubscriptionError } = await supabase
+    // Verificar se existe alguma assinatura inativa para o usuário que podemos reativar
+    const { data: inactiveSubscriptionData, error: inactiveSubscriptionError } = await supabase
       .from('subscriptions')
-      .insert({
-        user_id: attemptData.user_id,
-        plan_id: planId,
-        status: 'active',
-        start_date: startDate.toISOString(),
-        end_date: endDate.toISOString()
-      })
-
-    if (createSubscriptionError) {
-      console.error('Erro ao criar assinatura:', createSubscriptionError)
-      throw new Error(`Erro ao criar assinatura: ${createSubscriptionError.message}`)
+      .select('*')
+      .eq('user_id', attemptData.user_id)
+      .neq('status', 'active')
+      .order('created_at', { ascending: false })
+      .limit(1);
+      
+    if (inactiveSubscriptionError) {
+      console.error('Erro ao verificar assinaturas inativas:', inactiveSubscriptionError);
     }
     
-    console.log('Nova assinatura criada com sucesso');
+    if (!inactiveSubscriptionError && inactiveSubscriptionData && inactiveSubscriptionData.length > 0) {
+      console.log(`Assinatura inativa encontrada (ID: ${inactiveSubscriptionData[0].id}), reativando...`);
+      const { data: reactivatedSubscription, error: reactivateError } = await supabase
+        .from('subscriptions')
+        .update({
+          status: 'active',
+          plan_id: planId,
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', inactiveSubscriptionData[0].id)
+        .select();
+        
+      if (reactivateError) {
+        console.error('Erro ao reativar assinatura:', reactivateError);
+        // Continuar com a criação de uma nova assinatura
+      } else {
+        console.log(`Assinatura reativada com sucesso (ID: ${inactiveSubscriptionData[0].id})`);
+        subscriptionId = inactiveSubscriptionData[0].id;
+      }
+    }
+    
+    // Se não encontrou assinatura ativa ou inativa para reativar, criar uma nova
+    if (!subscriptionId) {
+      console.log('Nenhuma assinatura encontrada, criando nova...');
+      const { data: newSubscription, error: createSubscriptionError } = await supabase
+        .from('subscriptions')
+        .insert({
+          user_id: attemptData.user_id,
+          plan_id: planId,
+          status: 'active',
+          start_date: startDate.toISOString(),
+          end_date: endDate.toISOString(),
+          subscription_id: payment.id // Adicionar o ID do pagamento como referência externa
+        })
+        .select();
+
+      if (createSubscriptionError) {
+        console.error('Erro ao criar assinatura:', createSubscriptionError)
+        throw new Error(`Erro ao criar assinatura: ${createSubscriptionError.message}`)
+      }
+      
+      if (newSubscription && newSubscription.length > 0) {
+        subscriptionId = newSubscription[0].id;
+        console.log(`Nova assinatura criada com sucesso (ID: ${subscriptionId})`);
+      } else {
+        console.log('Nova assinatura criada, mas não foi possível recuperar o ID');
+      }
+    }
   }
+      
+  // Criar um registro de pagamento
+  const { data: paymentData, error: paymentError } = await supabase
+    .from('payments')
+    .insert({
+      user_id: attemptData.user_id,
+      amount: payment.transaction_amount,
+      currency: 'BRL',
+      payment_method: payment.payment_method_id,
+      transaction_id: payment.id,
+      status: 'approved',
+      subscription_id: subscriptionId  // Usar o ID da assinatura do nosso banco
+    })
+    .select();
+  
+  if (paymentError) {
+    console.error('Erro ao criar registro de pagamento:', paymentError)
+    throw new Error(`Erro ao criar registro de pagamento: ${paymentError.message}`)
+  }
+
+  if (!paymentData || paymentData.length === 0) {
+    console.error('Registro de pagamento criado, mas não foi possível recuperar os dados');
+    throw new Error('Erro ao recuperar dados do pagamento criado');
+  }
+
+  console.log('Registro de pagamento criado:', JSON.stringify(paymentData[0]));
 
   // Registrar um log financeiro
   console.log('Registrando log financeiro...');
+  
+  // Verificar se o nome do plano está correto com base no valor
+  let planNameToUse = attemptData.plan_name || 'Plano';
+  let planIntervalToUse = attemptData.plan_interval || 'mensal';
+  
+  // Se temos o ID do plano, buscar o nome diretamente
+  if (planId) {
+    const { data: planDetails, error: planDetailsError } = await supabase
+      .from('plans')
+      .select('name, billing_interval')
+      .eq('id', planId)
+      .limit(1);
+      
+    if (!planDetailsError && planDetails && planDetails.length > 0) {
+      planNameToUse = planDetails[0].name;
+      if (planDetails[0].billing_interval) {
+        planIntervalToUse = planDetails[0].billing_interval;
+      }
+      console.log(`Nome do plano obtido diretamente pelo ID: ${planNameToUse} (${planIntervalToUse})`);
+    }
+  }
+  // Se não temos o ID do plano ou não conseguimos obter o nome, tentar pelo valor
+  else if (!attemptData.plan_price || payment.transaction_amount !== attemptData.plan_price) {
+    console.log(`Valor do pagamento (${payment.transaction_amount}) difere do valor do plano informado (${attemptData.plan_price || 'não informado'}). Buscando plano correto...`);
+    
+    // Se ainda não encontrar, buscar todos os planos ativos para comparar
+    const { data: allPlansData, error: allPlansError } = await supabase
+      .from('plans')
+      .select('id, name, price, billing_interval')
+      .eq('active', true);
+      
+    if (!allPlansError && allPlansData && allPlansData.length > 0) {
+      // Tentar encontrar o plano mais próximo com base no valor e intervalo
+      console.log(`Buscando plano mais adequado entre ${allPlansData.length} planos ativos...`);
+      
+      // Primeiro, filtrar por intervalo se disponível
+      let possiblePlans = allPlansData;
+      if (attemptData.plan_interval) {
+        possiblePlans = allPlansData.filter(p => p.billing_interval === attemptData.plan_interval);
+      }
+      
+      if (possiblePlans.length > 0) {
+        // Encontrar o plano com o valor mais próximo
+        let closestPlan = possiblePlans[0];
+        let minDiff = Math.abs(closestPlan.price - payment.transaction_amount);
+        
+        for (let i = 1; i < possiblePlans.length; i++) {
+          const diff = Math.abs(possiblePlans[i].price - payment.transaction_amount);
+          if (diff < minDiff) {
+            minDiff = diff;
+            closestPlan = possiblePlans[i];
+          }
+        }
+        
+        // Se a diferença for pequena (menos de 5%), considerar como o plano correto
+        if (minDiff / payment.transaction_amount < 0.05) {
+          planNameToUse = closestPlan.name;
+          planIntervalToUse = closestPlan.billing_interval;
+          console.log(`Plano mais próximo encontrado: ${planNameToUse} (${closestPlan.price} ${closestPlan.billing_interval})`);
+        } else {
+          console.log(`Nenhum plano próximo encontrado. Diferença mínima: ${minDiff}`);
+        }
+      }
+    }
+  }
+  
+  // Verificar se o plano é Premium com base no nome ou ID nos metadados
+  if (attemptData.plan_id && attemptData.plan_id.toLowerCase().includes('premium')) {
+    console.log('Detectado plano Premium nos metadados, ajustando nome...');
+    planNameToUse = planNameToUse.includes('Premium') ? planNameToUse : 'Plano Premium';
+  }
+  
+  console.log(`Nome final do plano para log financeiro: ${planNameToUse} (${planIntervalToUse})`);
+  
   const { error: logError } = await supabase
     .from('financial_logs')
     .insert({
       user_id: attemptData.user_id,
       action: 'payment_processed',
-      description: `Pagamento de ${attemptData.plan_name} processado com sucesso`,
+      description: `Pagamento de ${planNameToUse} ${planIntervalToUse} processado com sucesso`,
       data: {
-        payment_id: payment.id.toString(),
-        amount: payment.transaction_amount || payment.transaction_details?.total_paid_amount,
-        plan_name: attemptData.plan_name,
-        plan_interval: attemptData.plan_interval
+        payment_id: payment.id,
+        amount: payment.transaction_amount,
+        plan_name: planNameToUse,
+        plan_interval: planIntervalToUse
       }
     })
 

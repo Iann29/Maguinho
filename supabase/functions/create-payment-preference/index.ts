@@ -160,6 +160,7 @@ serve(async (req) => {
           pending: 'https://maguinho.com/subscription'
         },
         auto_return: 'approved',
+        notification_url: 'https://zssitwbdprfnqglttwhs.supabase.co/functions/v1/payment-webhook-public',
         statement_descriptor: 'MAGUINHO',
         external_reference: user.id,
         metadata: {
@@ -209,6 +210,7 @@ serve(async (req) => {
               pending: 'https://maguinho.com/subscription'
             },
             auto_return: 'approved',
+            notification_url: 'https://zssitwbdprfnqglttwhs.supabase.co/functions/v1/payment-webhook-public',
             statement_descriptor: 'MAGUINHO',
             external_reference: user.id,
             metadata: {
