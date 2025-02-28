@@ -92,10 +92,55 @@
 - Status: 0% notificações entregues
 - Problema identificado: URL configurada era de teste, não de produção
 
+## Teste Adicional (28/02 - 11:18)
+
+### Processo de Pagamento
+- Realizado novo pagamento com saldo na conta de teste
+- Operação #103710693812
+- Status: Aprovado
+
+### Mercado Pago Webhook
+- Status: Falha na entrega
+- Evento: payment.created
+- Data/Hora: 28/02/2025, 14:18:49 (timezone diferente, horário local: 11:18)
+- ID do pagamento: 103710693812
+
+### Corpo da requisição enviada pelo MP:
+```json
+{
+  "action": "payment.created",
+  "api_version": "v1",
+  "data": {
+    "id": "103710693812"
+  },
+  "date_created": "2025-02-28T14:18:49Z",
+  "id": 119435828889,
+  "live_mode": true,
+  "type": "payment",
+  "user_id": "2293113905"
+}
+```
+
+### Edge Function: payment-webhook
+- Resultado: Nenhum log registrado novamente!
+
+### Banco de Dados
+- Nenhuma atualização nas tabelas payments, subscriptions
+
+### Teste Direto da API
+- Comando: 
+```
+Invoke-WebRequest -Uri "https://zssitwbdprfnqglttwhs.functions.supabase.co/payment-webhook" -Method POST -Body '{payload JSON}'
+```
+- Resultado: Erro 401 Não Autorizado
+- Nenhum log na edge function
+
 ## Problemas Identificados
 
 1. **Webhook não está funcionando**
-   - Causa provável: URL incorreta configurada no Mercado Pago
+   - Causas prováveis:
+     - Função edge requer autenticação (erro 401)
+     - Configuração de segurança ou JWT incorreta
    - Impacto: Não está criando registros em payments, subscriptions e transactions
 
 2. **Experiência de usuário no checkout**
@@ -107,7 +152,48 @@
 
 ## Próximos Passos
 
-1. Corrigir a URL do webhook no painel do Mercado Pago para a URL de produção
-2. Verificar e melhorar o tratamento de notificações na edge function payment-webhook
-3. Revisar e aprimorar a interface de pagamento no frontend
-4. Implementar testes adicionais após as correções
+1. Revisar configuração de segurança da edge function payment-webhook:
+   - Verificar se está definida como "no auth" ou "anon key"
+   - Confirmar que não há verificação JWT habilitada
+
+2. Corrigir a configuração da função payment-webhook para permitir requisições sem autenticação
+
+3. Testar webhook diretamente com um client HTTP que permita ver headers completos (Postman)
+
+4. Revisar e aprimorar a interface de pagamento no frontend após resolver o problema do webhook
+
+## Ações Tomadas (28/02 - 14:40)
+
+1. **Criado arquivo config.json para payment-webhook**
+   - Configurado `public_access: true` para permitir acesso sem autenticação
+   - Implantado através de `npx supabase functions deploy payment-webhook --no-verify-jwt`
+   - Resultado: Erro 500 ao chamar a função diretamente
+
+2. **Criado nova função payment-webhook-public**
+   - Nova função criada com base no código existente
+   - Configurado explicitamente `public_access: true` no config.json
+   - Implantado com `--no-verify-jwt`
+   - Resultado: Erro 500 ao chamar a função diretamente
+
+3. **Testes realizados**
+   - Ambas as funções ainda apresentam problemas
+   - A função payment-webhook agora retorna erro 500 (Erro Interno) ao invés de erro 401 (Não Autorizado)
+   - Indica progresso parcial, pois antes não era possível nem acessar a função
+
+## Próximos Passos Atualizados
+
+1. **Verificar logs de execução no Supabase**
+   - Acessar o painel do Supabase para visualizar logs detalhados das funções edge
+   - Identificar a causa específica do erro 500
+
+2. **Testar função com dados simplificados**
+   - Criar um payload mínimo para testar a função
+   - Isolar possíveis erros no processamento do pagamento
+
+3. **Verificar variáveis de ambiente**
+   - Confirmar que todas as variáveis necessárias estão configuradas corretamente no Supabase
+   - MP_CLIENT_ID, MP_CLIENT_SECRET, MP_WEBHOOK_SECRET, etc.
+
+4. **Atualizar URL do webhook no Mercado Pago**
+   - Atualizar para apontar para a função payment-webhook-public
+   - Certificar-se de configurar para ambiente de produção
