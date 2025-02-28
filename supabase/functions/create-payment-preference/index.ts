@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { corsHeaders } from '../_shared/cors.ts'
-import { MercadoPagoConfig, Preference } from 'https://esm.sh/mercadopago@1.5.16'
+import mercadopago from 'https://esm.sh/mercadopago@1.5.16'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || ''
@@ -62,12 +62,11 @@ serve(async (req) => {
     }
 
     // Configurar o Mercado Pago
-    const mercadopago = new MercadoPagoConfig({
-      accessToken: MP_ACCESS_TOKEN
-    })
+    mercadopago.configure({
+      access_token: MP_ACCESS_TOKEN
+    });
 
     // Criar preferência de pagamento
-    const preference = new Preference(mercadopago)
     const preferenceData = {
       items: [
         {
@@ -96,12 +95,12 @@ serve(async (req) => {
       }
     }
 
-    const result = await preference.create({ body: preferenceData })
+    const result = await mercadopago.preferences.create({ body: preferenceData })
 
     // Registrar a tentativa de pagamento no banco de dados
     await supabase.from('payment_attempts').insert({
       user_id: user.id,
-      preference_id: result.id,
+      preference_id: result.body.id,
       plan_id: planId,
       plan_name: planName,
       plan_price: planPrice,
@@ -109,7 +108,7 @@ serve(async (req) => {
       status: 'pending'
     })
 
-    return new Response(JSON.stringify({ preferenceId: result.id }), {
+    return new Response(JSON.stringify({ preferenceId: result.body.id }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
