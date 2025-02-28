@@ -5,21 +5,67 @@ import { corsHeaders } from '../_shared/cors.ts'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || ''
 
-// Usar diretamente as credenciais de produção, pois são as que estão configuradas
-const MP_ACCESS_TOKEN = Deno.env.get('MP_PROD_ACCESS_TOKEN') || ''
+// Obter as credenciais do Mercado Pago das variáveis de ambiente
 const MP_CLIENT_ID = Deno.env.get('MP_PROD_CLIENT_ID') || ''
 const MP_CLIENT_SECRET = Deno.env.get('MP_PROD_CLIENT_SECRET') || ''
 
-console.log('Token de acesso disponível:', !!MP_ACCESS_TOKEN);
 console.log('Client ID disponível:', !!MP_CLIENT_ID);
 console.log('Client Secret disponível:', !!MP_CLIENT_SECRET);
 
-// Imprimir os primeiros e últimos 10 caracteres do token para verificação
-if (MP_ACCESS_TOKEN) {
-  const tokenLength = MP_ACCESS_TOKEN.length;
-  console.log(`Token de acesso (primeiros 10 caracteres): ${MP_ACCESS_TOKEN.substring(0, 10)}...`);
-  console.log(`Token de acesso (últimos 10 caracteres): ...${MP_ACCESS_TOKEN.substring(tokenLength - 10)}`);
-  console.log(`Comprimento do token: ${tokenLength} caracteres`);
+// Função para obter um token de acesso usando client_id e client_secret
+async function getAccessToken() {
+  try {
+    console.log('Tentando obter token de acesso com Client ID e Secret');
+    const response = await fetch('https://api.mercadopago.com/oauth/token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json'
+      },
+      body: new URLSearchParams({
+        'grant_type': 'client_credentials',
+        'client_id': MP_CLIENT_ID,
+        'client_secret': MP_CLIENT_SECRET
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      console.error('Erro ao obter token de acesso:', errorData);
+      throw new Error(errorData.message || 'Erro ao obter token de acesso');
+    }
+
+    const data = await response.json();
+    console.log('Token de acesso obtido com sucesso');
+    return data.access_token;
+  } catch (error) {
+    console.error('Erro ao obter token de acesso:', error);
+    throw error;
+  }
+}
+
+// Cache para o token de acesso
+let cachedToken = null;
+let tokenExpiry = 0;
+
+// Função para obter um token válido, seja das variáveis de ambiente, do cache ou gerando um novo
+async function getValidToken() {
+  // Se temos um token em cache e ele ainda é válido, usamos ele
+  const now = Date.now();
+  if (cachedToken && tokenExpiry > now) {
+    console.log('Usando token em cache');
+    return cachedToken;
+  }
+
+  // Sempre geramos um novo token usando Client ID e Client Secret
+  console.log('Gerando novo token com Client ID e Client Secret');
+  const newToken = await getAccessToken();
+  
+  // Armazenamos o token em cache por 2 horas (7200000 ms)
+  cachedToken = newToken;
+  tokenExpiry = now + 7200000;
+  
+  return newToken;
 }
 
 serve(async (req) => {
@@ -78,17 +124,20 @@ serve(async (req) => {
       })
     }
 
+    // Obter um token válido para o Mercado Pago
+    const accessToken = await getValidToken();
+
     // Criar preferência de pagamento usando fetch diretamente
     console.log('Tentando criar preferência de pagamento com o Mercado Pago');
     
     // Imprimir o cabeçalho de autorização para depuração
-    console.log('Cabeçalho de autorização: Bearer ' + MP_ACCESS_TOKEN.substring(0, 10) + '...');
+    console.log('Cabeçalho de autorização: Bearer ' + accessToken.substring(0, 10) + '...');
     
     const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${MP_ACCESS_TOKEN}`
+        'Authorization': `Bearer ${accessToken}`
       },
       body: JSON.stringify({
         items: [
@@ -125,18 +174,19 @@ serve(async (req) => {
       const errorData = await mpResponse.json();
       console.error('Erro do Mercado Pago:', errorData);
       
-      // Tentar com o token de teste como fallback
-      console.log('Tentando com o token de teste como fallback');
-      const MP_TEST_ACCESS_TOKEN = Deno.env.get('MP_TEST_ACCESS_TOKEN') || '';
-      
-      if (MP_TEST_ACCESS_TOKEN) {
-        console.log('Token de teste disponível, tentando novamente');
+      // Se o token falhou, limpar o cache e tentar novamente com um novo token
+      if (errorData.status === 401) {
+        console.log('Token inválido, gerando um novo token');
+        cachedToken = null;
         
-        const mpTestResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
+        const newToken = await getAccessToken();
+        
+        console.log('Tentando novamente com o novo token');
+        const retryResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${MP_TEST_ACCESS_TOKEN}`
+            'Authorization': `Bearer ${newToken}`
           },
           body: JSON.stringify({
             items: [
@@ -169,14 +219,14 @@ serve(async (req) => {
           })
         });
         
-        if (mpTestResponse.ok) {
-          const testResult = await mpTestResponse.json();
-          console.log('Preferência criada com sucesso usando token de teste:', testResult.id);
+        if (retryResponse.ok) {
+          const retryResult = await retryResponse.json();
+          console.log('Preferência criada com sucesso após retry:', retryResult.id);
           
           // Registrar a tentativa de pagamento no banco de dados
           await supabase.from('payment_attempts').insert({
             user_id: user.id,
-            preference_id: testResult.id,
+            preference_id: retryResult.id,
             plan_id: planId,
             plan_name: planName,
             plan_price: planPrice,
@@ -184,13 +234,13 @@ serve(async (req) => {
             status: 'pending'
           });
           
-          return new Response(JSON.stringify({ preferenceId: testResult.id }), {
+          return new Response(JSON.stringify({ preferenceId: retryResult.id }), {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
         } else {
-          const testErrorData = await mpTestResponse.json();
-          console.error('Erro do Mercado Pago com token de teste:', testErrorData);
+          const retryErrorData = await retryResponse.json();
+          console.error('Erro do Mercado Pago após retry:', retryErrorData);
         }
       }
       
