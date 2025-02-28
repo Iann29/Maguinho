@@ -41,6 +41,7 @@ serve(async (req) => {
 
     // Obter dados do corpo da requisição
     const data = await req.json()
+    console.log('Webhook recebido:', JSON.stringify(data, null, 2))
     
     // Criar cliente Supabase
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -49,21 +50,30 @@ serve(async (req) => {
     if (data.type === 'payment') {
       const paymentId = data.data.id
       
-      // Obter detalhes do pagamento (você precisaria implementar esta função)
-      // const paymentDetails = await getPaymentDetails(paymentId)
+      // Buscar detalhes do pagamento na API do Mercado Pago
+      const paymentResponse = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        headers: {
+          'Authorization': `Bearer ${MP_ACCESS_TOKEN}`
+        }
+      })
       
-      // Simulação de detalhes do pagamento
-      const paymentDetails = {
-        status: data.action, // 'approved', 'rejected', 'pending'
-        external_reference: data.user_id, // ID do usuário
-        preference_id: data.preference_id
+      if (!paymentResponse.ok) {
+        console.error('Erro ao obter detalhes do pagamento:', await paymentResponse.text())
+        throw new Error('Erro ao obter detalhes do pagamento')
       }
+      
+      const paymentDetails = await paymentResponse.json()
+      console.log('Detalhes do pagamento:', JSON.stringify(paymentDetails, null, 2))
+      
+      // Obter o preference_id e o status do pagamento
+      const preferenceId = paymentDetails.preference_id
+      const status = paymentDetails.status // 'approved', 'rejected', 'pending', etc.
       
       // Atualizar o status da tentativa de pagamento
       const { data: paymentAttempt, error: paymentAttemptError } = await supabase
         .from('payment_attempts')
-        .update({ status: paymentDetails.status })
-        .eq('preference_id', paymentDetails.preference_id)
+        .update({ status: status })
+        .eq('preference_id', preferenceId)
         .select('*')
         .single()
         
@@ -76,7 +86,7 @@ serve(async (req) => {
       }
       
       // Se o pagamento foi aprovado, criar ou atualizar a assinatura
-      if (paymentDetails.status === 'approved' && paymentAttempt) {
+      if (status === 'approved' && paymentAttempt) {
         // Calcular data de término com base no intervalo
         let endDate = new Date()
         switch (paymentAttempt.plan_interval) {

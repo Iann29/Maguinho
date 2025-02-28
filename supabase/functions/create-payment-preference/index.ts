@@ -1,7 +1,6 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
 import { corsHeaders } from '../_shared/cors.ts'
-import mercadopago from 'https://esm.sh/mercadopago@1.5.16'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || ''
@@ -25,17 +24,22 @@ serve(async (req) => {
       })
     }
 
-    // Obter o token de autorização do cabeçalho
+    // Extrair o token de autorização
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: 'Não autorizado' }), {
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autorização não fornecido' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    // Extrair o token JWT
-    const token = authHeader.replace('Bearer ', '')
+    const token = authHeader.split(' ')[1]
+    if (!token) {
+      return new Response(JSON.stringify({ error: 'Token de autorização inválido' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
 
     // Criar cliente Supabase
     const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
@@ -61,46 +65,56 @@ serve(async (req) => {
       })
     }
 
-    // Configurar o Mercado Pago
-    mercadopago.configure({
-      access_token: MP_ACCESS_TOKEN
+    // Criar preferência de pagamento usando fetch diretamente
+    const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${MP_ACCESS_TOKEN}`
+      },
+      body: JSON.stringify({
+        items: [
+          {
+            id: planId,
+            title: planName || 'Assinatura Maguinho',
+            description: `Assinatura ${planInterval} do Maguinho`,
+            quantity: 1,
+            currency_id: 'BRL',
+            unit_price: planPrice
+          }
+        ],
+        payer: {
+          name: userName || user.email || 'Usuário',
+          email: user.email
+        },
+        back_urls: {
+          success: 'https://maguinho.com/dashboard',
+          failure: 'https://maguinho.com/subscription',
+          pending: 'https://maguinho.com/subscription'
+        },
+        auto_return: 'approved',
+        statement_descriptor: 'MAGUINHO',
+        external_reference: user.id,
+        metadata: {
+          user_id: user.id,
+          plan_id: planId,
+          plan_interval: planInterval
+        }
+      })
     });
 
-    // Criar preferência de pagamento
-    const preferenceData = {
-      items: [
-        {
-          id: planId,
-          title: `Maguinho - ${planName} (${planInterval})`,
-          quantity: 1,
-          currency_id: 'BRL',
-          unit_price: planPrice
-        }
-      ],
-      payer: {
-        name: userName || user.email,
-        email: user.email
-      },
-      back_urls: {
-        success: `${req.headers.get('origin')}/subscription/success`,
-        failure: `${req.headers.get('origin')}/subscription/failure`,
-        pending: `${req.headers.get('origin')}/subscription/pending`
-      },
-      auto_return: 'approved',
-      external_reference: user.id,
-      metadata: {
-        user_id: user.id,
-        plan_id: planId,
-        plan_interval: planInterval
-      }
+    if (!mpResponse.ok) {
+      const errorData = await mpResponse.json();
+      console.error('Erro do Mercado Pago:', errorData);
+      throw new Error(errorData.message || 'Erro ao criar preferência de pagamento');
     }
 
-    const result = await mercadopago.preferences.create({ body: preferenceData })
+    const result = await mpResponse.json();
 
     // Registrar a tentativa de pagamento no banco de dados
     await supabase.from('payment_attempts').insert({
       user_id: user.id,
-      preference_id: result.body.id,
+      preference_id: result.id,
       plan_id: planId,
       plan_name: planName,
       plan_price: planPrice,
@@ -108,7 +122,7 @@ serve(async (req) => {
       status: 'pending'
     })
 
-    return new Response(JSON.stringify({ preferenceId: result.body.id }), {
+    return new Response(JSON.stringify({ preferenceId: result.id }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
