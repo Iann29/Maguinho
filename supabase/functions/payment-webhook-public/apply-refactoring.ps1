@@ -1,4 +1,19 @@
-﻿import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
+# Script para aplicar a refatoração
+$timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+$originalFile = "index.ts"
+$backupFile = "index.ts.backup_$timestamp"
+$refactoredContent = "index.ts.refactored"
+
+# Verificar se já existe um backup
+if (-not (Test-Path -Path "$originalFile.backup_*")) {
+    # Criar backup se não existir
+    Copy-Item -Path $originalFile -Destination $backupFile
+    Write-Host "Backup do arquivo original criado: $backupFile"
+}
+
+# Criar arquivo temporário com o conteúdo refatorado
+$refactoredCode = @'
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
 import { corsHeaders } from '../_shared/cors.ts'
 import { 
   getValidToken, 
@@ -206,3 +221,14 @@ serve(async (req) => {
     })
   }
 })
+'@
+
+# Escrever o conteúdo refatorado para um arquivo temporário
+$refactoredCode | Out-File -FilePath $refactoredContent -Encoding utf8
+
+# Substituir o arquivo original pelo refatorado
+Copy-Item -Path $refactoredContent -Destination $originalFile -Force
+Remove-Item -Path $refactoredContent -Force
+
+Write-Host "Refatoração aplicada com sucesso ao arquivo $originalFile"
+Write-Host "O backup do arquivo original está em $backupFile"
