@@ -1,5 +1,0 @@
-{
-  "name": "payment-webhook",
-  "version": "1.0.0",
-  "description": "Processa webhooks de pagamento do Mercado Pago"
-}
