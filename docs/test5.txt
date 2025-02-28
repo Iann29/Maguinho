@@ -1,0 +1,507 @@
+Nesse estado q vc deixou, vou tentar realizar um pagamento para ver o que acontece.
+
+fiz o processo la e fomos para o checkout
+entrei na conta de test
+vou clicar em pagar agora> 
+
+ok pagamento aprovado e voltamos pra dashboard:
+
+Pronto! Seu pagamento já foi aprovado
+Operação #103312460533
+
+vamos ver no mercado pago dev agora:
+
+Falha na entrega - 500
+payment.create
+payment
+28/02/2025, 14:40:58
+Pagamentos
+103312460533
+
+corpo da requisição:
+{
+  "action": "payment.created",
+  "api_version": "v1",
+  "data": {
+    "id": "103312460533"
+  },
+  "date_created": "2025-02-28T14:40:58Z",
+  "id": 119436280693,
+  "live_mode": true,
+  "type": "payment",
+  "user_id": "2293113905"
+}
+
+o webhook está configurado assim:
+https://zssitwbdprfnqglttwhs.functions.supabase.co/payment-webhook-public
+
+pagamentos e planos e assinaturas marcado.
+
+outros eventos não tem nada marcado.
+
+simulei uma notificação como Pagamentos e veio isso:
+O teste desta URL falhou, mas você pode tentar novamente.
+Solicitação:
+
+{
+
+  action: "payment.updated",
+
+  api_version: "v1",
+
+  data: {"id":"123456"},
+
+  date_created: "2021-11-01T02:02:02Z",
+
+  id: "123456",
+
+  live_mode: false,
+
+  type: "payment",
+
+  user_id: 2293113905
+
+}
+
+Resposta:
+
+500 - Internal Server Error
+
+Descrição:
+
+Não foi possível executar a requisição devido a um erro interno do servidor.
+Para encontrar o problema, recomendamos que você verifique o código ou logs do seu servidor.
+
+
+Simulei como planos e assinatura e deu sucesso!
+Excelente! Enviamos uma notificação Webhook com sucesso.
+Solicitação:
+
+{
+
+  action: "updated",
+
+  application_id: "4451217525003945",
+
+  data: {"id":"123456"},
+
+  date: "2021-11-01T02:02:02Z",
+
+  entity: "preapproval",
+
+  id: "123456",
+
+  type: "subscription_preapproval",
+
+  version: 8
+
+}
+
+Resposta:
+
+200 - OK
+
+Agora no supabase:
+
+logas create-payment-preference ultimos 15 minutos:
+"event_message","event_type","function_id","id","level","timestamp"
+"shutdown","Shutdown","2091a4b5-ba33-49e6-b3ff-aa8418cadc6f","a9a21e1e-bec9-4145-8183-465f041dc564","log","1740753664894210"
+"Preferência criada com sucesso: 2293113905-acb38868-19a4-4191-b206-623f7553738a
+","Log","2091a4b5-ba33-49e6-b3ff-aa8418cadc6f","fcf5a618-14c7-45d4-97cb-208a2738660c","log","1740753589473139"
+"Cabeçalho de autorização: Bearer APP_USR-44...
+","Log","2091a4b5-ba33-49e6-b3ff-aa8418cadc6f","c54039e0-a749-4386-bb70-21f9f86b5758","log","1740753589472886"
+"Tentando criar preferência de pagamento com o Mercado Pago
+","Log","2091a4b5-ba33-49e6-b3ff-aa8418cadc6f","03f2526c-56f9-471d-b7d9-4a499169be63","log","1740753589472653"
+"Token de acesso obtido com sucesso
+","Log","2091a4b5-ba33-49e6-b3ff-aa8418cadc6f","ea10ce99-1bc3-4e39-ada9-9fb02d9b6106","log","1740753589472397"
+"Tentando obter token de acesso com Client ID e Secret
+","Log","2091a4b5-ba33-49e6-b3ff-aa8418cadc6f","cc3e734b-b568-4a2e-9821-cecb55cfdf2d","log","1740753589472160"
+"Gerando novo token com Client ID e Client Secret
+","Log","2091a4b5-ba33-49e6-b3ff-aa8418cadc6f","d4f0d4d3-88e2-4eb5-8b27-7c2786c08897","log","1740753589471868"
+"Listening on http://localhost:9999/
+","Log","2091a4b5-ba33-49e6-b3ff-aa8418cadc6f","57380d77-45a3-44f0-bb1d-72ece14a6f28","log","1740753589471580"
+"Client Secret disponível: true
+","Log","2091a4b5-ba33-49e6-b3ff-aa8418cadc6f","9e7b05a5-d339-4ad1-8c2d-9025d1d343f6","log","1740753589471286"
+"Client ID disponível: true
+","Log","2091a4b5-ba33-49e6-b3ff-aa8418cadc6f","e54d8a14-3285-43b7-bd65-b48c46e51de3","log","1740753589471083"
+"booted (time: 31ms)","Boot","2091a4b5-ba33-49e6-b3ff-aa8418cadc6f","e3f11660-5ea9-49d9-97f9-a7ddaea88d0a","log","1740753589470840"
+
+logs payment-webhook ultimos 15 minutos:
+"event_message","event_type","function_id","id","level","timestamp"
+"shutdown","Shutdown","cb83b72b-e483-448c-96c2-b34df3da85e0","67ef0974-88c4-405c-9dfc-762294fa0aac","log","1740753440026539"
+"Erro ao processar pagamento: Error: ID de preferência não encontrado no pagamento
+    at processPayment (file:///projects/maguinho/supabase/functions/payment-webhook/index.ts:204:13)
+    at Server.<anonymous> (file:///projects/maguinho/supabase/functions/payment-webhook/index.ts:178:18)
+    at eventLoopTick (ext:core/01_core.js:168:7)
+    at async #respond (https://deno.land/std@0.177.0/http/server.ts:220:18)
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","0f9a753f-d8c4-4fa1-a13f-3b4b257786c2","error","1740753365001280"
+"ID de preferência não encontrado no pagamento
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","7fae14c6-6cd1-43ea-9029-d271ea9faed5","error","1740753365000996"
+"Preference ID encontrado: undefined
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","719e721b-7582-4783-b74d-612b99a32efb","log","1740753365000694"
+"Processando pagamento: {"accounts_info":null,"acquirer_reconciliation":[],"additional_info":{"ip_address":"131.221.15.66","items":[{"description":"Assinatura mensal do Maguinho","id":"plano_basico_mensal","quantity":"1","title":"Plano Básico","unit_price":"19.99"}],"payer":{"first_name":"Ian Lucas Beé"},"tracking_id":"platform:v1-blacklabel,so:ALL,type:N/A,security:none"},"authorization_code":null,"binary_mode":false,"brand_id":null,"build_version":"3.94.0-rc-36","call_for_authorize_id":null,"captured":true,"card":{},"charges_details":[{"accounts":{"from":"collector","to":"mp"},"amounts":{"original":1,"refunded":0},"client_id":0,"date_created":"2025-02-28T10:18:49.000-04:00","id":"103710693812-001","last_updated":"2025-02-28T10:18:49.000-04:00","metadata":{"source":"rule-engine"},"name":"mercadopago_fee","refund_charges":[],"reserve_id":null,"type":"fee"}],"charges_execution_info":{"internal_execution":{"date":"2025-02-28T10:18:49.615-04:00","execution_id":"01JN6ES6SW5972TPF0AFK51AF4"}},"collector_id":2293113905,"corporation_id":null,"counter_currency":null,"coupon_amount":0,"currency_id":"BRL","date_approved":"2025-02-28T10:18:49.000-04:00","date_created":"2025-02-28T10:18:49.000-04:00","date_last_updated":"2025-02-28T10:18:54.000-04:00","date_of_expiration":null,"deduction_schema":null,"description":"Plano Básico","differential_pricing_id":null,"external_reference":"518d7220-f0e0-41ea-a699-e73fa1d605df","fee_details":[{"amount":1,"fee_payer":"collector","type":"mercadopago_fee"}],"financing_group":null,"id":103710693812,"installments":1,"integrator_id":null,"issuer_id":"2007","live_mode":true,"marketplace_owner":null,"merchant_account_id":null,"merchant_number":null,"metadata":{"user_id":"518d7220-f0e0-41ea-a699-e73fa1d605df","plan_interval":"mensal","plan_id":"plano_basico_mensal"},"money_release_date":"2025-02-28T10:18:49.000-04:00","money_release_schema":null,"money_release_status":"released","notification_url":null,"operation_type":"regular_payment","order":{"id":"28935464653","type":"mercadopago"},"payer":{"email":"test_user_1372776159@testuser.com","entity_type":null,"first_name":null,"id":"2296440702","identification":{"number":"11111111111","type":"CPF"},"last_name":null,"operator_id":null,"phone":{"number":null,"extension":null,"area_code":null},"type":null},"payment_method":{"id":"account_money","issuer_id":"2007","type":"account_money"},"payment_method_id":"account_money","payment_type_id":"account_money","platform_id":null,"point_of_interaction":{"business_info":{"branch":"Merchant Services","sub_unit":"checkout_pro","unit":"online_payments"},"transaction_data":{"e2e_id":null},"type":"CHECKOUT"},"pos_id":null,"processing_mode":"aggregator","refunds":[],"release_info":null,"shipping_amount":0,"sponsor_id":null,"statement_descriptor":null,"status":"approved","status_detail":"accredited","store_id":null,"tags":null,"taxes_amount":0,"transaction_amount":19.99,"transaction_amount_refunded":0,"transaction_details":{"acquirer_reference":null,"external_resource_url":null,"financial_institution":null,"installment_amount":0,"net_received_amount":18.99,"overpaid_amount":0,"payable_deferral_period":null,"payment_method_reference_id":null,"total_paid_amount":19.99}}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","7067586c-1704-4009-9730-deb58afcd76a","log","1740753365000445"
+"Dados do pagamento obtidos: {"accounts_info":null,"acquirer_reconciliation":[],"additional_info":{"ip_address":"131.221.15.66","items":[{"description":"Assinatura mensal do Maguinho","id":"plano_basico_mensal","quantity":"1","title":"Plano Básico","unit_price":"19.99"}],"payer":{"first_name":"Ian Lucas Beé"},"tracking_id":"platform:v1-blacklabel,so:ALL,type:N/A,security:none"},"authorization_code":null,"binary_mode":false,"brand_id":null,"build_version":"3.94.0-rc-36","call_for_authorize_id":null,"captured":true,"card":{},"charges_details":[{"accounts":{"from":"collector","to":"mp"},"amounts":{"original":1,"refunded":0},"client_id":0,"date_created":"2025-02-28T10:18:49.000-04:00","id":"103710693812-001","last_updated":"2025-02-28T10:18:49.000-04:00","metadata":{"source":"rule-engine"},"name":"mercadopago_fee","refund_charges":[],"reserve_id":null,"type":"fee"}],"charges_execution_info":{"internal_execution":{"date":"2025-02-28T10:18:49.615-04:00","execution_id":"01JN6ES6SW5972TPF0AFK51AF4"}},"collector_id":2293113905,"corporation_id":null,"counter_currency":null,"coupon_amount":0,"currency_id":"BRL","date_approved":"2025-02-28T10:18:49.000-04:00","date_created":"2025-02-28T10:18:49.000-04:00","date_last_updated":"2025-02-28T10:18:54.000-04:00","date_of_expiration":null,"deduction_schema":null,"description":"Plano Básico","differential_pricing_id":null,"external_reference":"518d7220-f0e0-41ea-a699-e73fa1d605df","fee_details":[{"amount":1,"fee_payer":"collector","type":"mercadopago_fee"}],"financing_group":null,"id":103710693812,"installments":1,"integrator_id":null,"issuer_id":"2007","live_mode":true,"marketplace_owner":null,"merchant_account_id":null,"merchant_number":null,"metadata":{"user_id":"518d7220-f0e0-41ea-a699-e73fa1d605df","plan_interval":"mensal","plan_id":"plano_basico_mensal"},"money_release_date":"2025-02-28T10:18:49.000-04:00","money_release_schema":null,"money_release_status":"released","notification_url":null,"operation_type":"regular_payment","order":{"id":"28935464653","type":"mercadopago"},"payer":{"email":"test_user_1372776159@testuser.com","entity_type":null,"first_name":null,"id":"2296440702","identification":{"number":"11111111111","type":"CPF"},"last_name":null,"operator_id":null,"phone":{"number":null,"extension":null,"area_code":null},"type":null},"payment_method":{"id":"account_money","issuer_id":"2007","type":"account_money"},"payment_method_id":"account_money","payment_type_id":"account_money","platform_id":null,"point_of_interaction":{"business_info":{"branch":"Merchant Services","sub_unit":"checkout_pro","unit":"online_payments"},"transaction_data":{"e2e_id":null},"type":"CHECKOUT"},"pos_id":null,"processing_mode":"aggregator","refunds":[],"release_info":null,"shipping_amount":0,"sponsor_id":null,"statement_descriptor":null,"status":"approved","status_detail":"accredited","store_id":null,"tags":null,"taxes_amount":0,"transaction_amount":19.99,"transaction_amount_refunded":0,"transaction_details":{"acquirer_reference":null,"external_resource_url":null,"financial_institution":null,"installment_amount":0,"net_received_amount":18.99,"overpaid_amount":0,"payable_deferral_period":null,"payment_method_reference_id":null,"total_paid_amount":19.99}}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","35eb1b51-ccc1-4dc1-b943-618d8283449e","log","1740753365000197"
+"Obtendo detalhes do pagamento: 103710693812
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","c6fbcd80-9c02-4a2e-b2e2-450e2b4476f6","log","1740753364999710"
+"Token de acesso obtido com sucesso
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","f1de4e9d-5a11-4cdb-8b39-c12f54001387","log","1740753364999462"
+"Tentando obter token de acesso com Client ID e Secret
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","620e100b-e820-403d-b8db-d32a9b064485","log","1740753364997825"
+"Gerando novo token com Client ID e Client Secret
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","9862a81c-b2f4-405c-8243-4fcd2d574902","log","1740753364997575"
+"Obtendo token para API do Mercado Pago
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","78bce753-b783-43a3-868e-94c298528442","log","1740753364997342"
+"ID do pagamento extraído: 103710693812
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","66bc402a-dfbd-4059-96d5-aba4efd0e19c","log","1740753364997089"
+"Tipo de notificação: payment
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","e1f7f60c-b1a1-4da0-b2bf-bee675730eb6","log","1740753364996773"
+"Dados do webhook recebidos: {"action":"payment.created","api_version":"v1","data":{"id":"103710693812"},"date_created":"2025-02-28T14:18:49Z","id":119436199199,"live_mode":true,"type":"payment","user_id":"2293113905"}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","043e5f4a-9993-489c-bf02-50a3b9b61796","log","1740753364996451"
+"Headers da requisição: {"accept":"application/json","accept-encoding":"gzip","cdn-loop":"cloudflare; loops=1; subreqs=1","cf-connecting-ip":"18.213.114.129","cf-ew-via":"15","cf-ray":"919124fee5846fc1-IAD","cf-visitor":"{\"scheme\":\"https\"}","cf-worker":"supabase.co","content-length":"189","content-type":"application/json","host":"edge-runtime.supabase.com","referer":"https://mercadopago.com.ar","user-agent":"MercadoPago WebHook v1.0 payment","x-amzn-trace-id":"Root=1-67c1c9d1-5b84ffd6670b1a76456c1052","x-b3-sampled":"0","x-b3-spanid":"0c59206979d1b820","x-b3-traceid":"0c59206979d1b820","x-deno-subhost":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6InN1cGFiYXNlIn0.eyJwcm9qZWN0X3JlZiI6Inpzc2l0d2JkcHJmbnFnbHR0d2hzIiwibmFtZSI6InBheW1lbnQtd2ViaG9vayIsInBsYW4iOiJ0aWVyX2ZyZWUiLCJycGNfcm9vdCI6Imh0dHBzOi8vc3VwYWJhc2Utb3JpZ2luLmRlbm8uZGV2L3YwLyIsImV4cCI6MTc0MDc1NDI2MSwiaWF0IjoxNzQwNzUzMzYxfQ.omWgg2sN6-jIDky5o_XDheGvahxvqJjMofr0gCxUSD4","x-forwarded-for":"18.213.114.129,18.213.114.129, 3.2.51.22","x-forwarded-host":"edge-runtime.supabase.com","x-forwarded-port":"443","x-forwarded-proto":"https","x-request-id":"b6cf4a64-a755-4e9d-8d7e-53177a448f84","x-rest-pool-name":"pool_unknown","x-signature":"ts=1740489434,v1=91a1474c44283824cf8a881a1dcdfc86f0a24ceab6756ba6d522d257454a48bf","x-socket-timeout":"7000","x-trace-digest-77":"zJhiz2Gf9JKGk+i7rT/xWldp/tThX3YozZMyi0Apq9wNgzHEylOajzPJ4XZ8e0NCjzKtp72dJktWAKRqxnt67vM0zkUaQSW8XHD83OrYRbIfOQE4oNOjElyzI8FdQAUC"}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","99c4474b-cc50-4a82-81f7-bb9e5184b85d","log","1740753364996196"
+"- URL: http://edge-runtime.supabase.com/payment-webhook?data.id=103710693812&type=payment
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","613e2bee-bb5c-431e-9c24-d7fb20cb4183","log","1740753364995919"
+"- Método: POST
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","10be3ac8-4da6-410a-b889-7004af29d210","log","1740753364995740"
+"Requisição recebida:
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","66851ec6-bc43-4530-8f4f-f832e85c6218","log","1740753364995443"
+"Listening on http://localhost:9999/
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","c2107ba1-e016-4961-8584-7fa5d38d3340","log","1740753364995138"
+"Webhook Secret disponível: true
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","d4df0f6e-f858-4157-80bb-5d16fbc30ad3","log","1740753364994765"
+"Client Secret disponível: true
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","f7266715-1b76-4e27-9067-733d8e67ba57","log","1740753364994552"
+"Client ID disponível: true
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","8ea22ba1-43cc-4cd2-86fa-f88b53eba470","log","1740753364994408"
+"SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc2l0d2JkcHJmbnFnbHR0d2hzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAwNzI3NTgsImV4cCI6MjA1NTY0ODc1OH0.AeCt0v9vn_6tVmqdGshLDl63TtDjmfk_Z3VBLGcxVgU
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","50847e27-63dc-4cd9-9144-7ca0f8521b14","log","1740753364994235"
+"SUPABASE_URL: https://zssitwbdprfnqglttwhs.supabase.co
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","d3997020-1aa6-44dc-8e0e-910509da324c","log","1740753364994054"
+"Ambiente: undefined
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","1361d92d-1005-4e0d-81d7-fddd1243df4c","log","1740753364993849"
+"Iniciando webhook...
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","95899aed-2f7f-4b5a-b818-25b84ba84265","log","1740753364993685"
+"booted (time: 20ms)","Boot","cb83b72b-e483-448c-96c2-b34df3da85e0","f5cec0dc-70a2-4e08-82e6-e44989408821","log","1740753364993270"
+"shutdown","Shutdown","cb83b72b-e483-448c-96c2-b34df3da85e0","56a627ac-5d45-4ad4-a813-8321b0d94dff","log","1740753195194091"
+"Erro ao processar pagamento: Error: ID de preferência não encontrado no pagamento
+    at processPayment (file:///projects/maguinho/supabase/functions/payment-webhook/index.ts:204:13)
+    at Server.<anonymous> (file:///projects/maguinho/supabase/functions/payment-webhook/index.ts:178:18)
+    at eventLoopTick (ext:core/01_core.js:168:7)
+    at async #respond (https://deno.land/std@0.177.0/http/server.ts:220:18)
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","fe7ef1d2-c78d-413f-b7b6-09ba3432ecf0","error","1740753120181357"
+"ID de preferência não encontrado no pagamento
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","4e39ce87-e8fc-4c2a-ab1a-c0a7b9369433","error","1740753120181099"
+"Preference ID encontrado: undefined
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","87f44c19-cfc4-42ba-b72f-aebdb67832f0","log","1740753120180858"
+"Processando pagamento: {"accounts_info":null,"acquirer_reconciliation":[],"additional_info":{"ip_address":"131.221.15.66","items":[{"description":"Assinatura mensal do Maguinho","id":"plano_basico_mensal","quantity":"1","title":"Plano Básico","unit_price":"19.99"}],"payer":{"first_name":"Ian Lucas Beé"},"tracking_id":"platform:v1-blacklabel,so:ALL,type:N/A,security:none"},"authorization_code":null,"binary_mode":false,"brand_id":null,"build_version":"3.94.0-rc-36","call_for_authorize_id":null,"captured":true,"card":{},"charges_details":[{"accounts":{"from":"collector","to":"mp"},"amounts":{"original":1,"refunded":0},"client_id":0,"date_created":"2025-02-28T09:37:17.000-04:00","id":"103305640381-001","last_updated":"2025-02-28T09:37:17.000-04:00","metadata":{"source":"rule-engine"},"name":"mercadopago_fee","refund_charges":[],"reserve_id":null,"type":"fee"}],"charges_execution_info":{"internal_execution":{"date":"2025-02-28T09:37:17.649-04:00","execution_id":"01JN6CD58YQAHSPGFB2QRB49Z1"}},"collector_id":2293113905,"corporation_id":null,"counter_currency":null,"coupon_amount":0,"currency_id":"BRL","date_approved":"2025-02-28T09:37:17.000-04:00","date_created":"2025-02-28T09:37:17.000-04:00","date_last_updated":"2025-02-28T09:37:22.000-04:00","date_of_expiration":null,"deduction_schema":null,"description":"Plano Básico","differential_pricing_id":null,"external_reference":"518d7220-f0e0-41ea-a699-e73fa1d605df","fee_details":[{"amount":1,"fee_payer":"collector","type":"mercadopago_fee"}],"financing_group":null,"id":103305640381,"installments":1,"integrator_id":null,"issuer_id":"2007","live_mode":true,"marketplace_owner":null,"merchant_account_id":null,"merchant_number":null,"metadata":{"user_id":"518d7220-f0e0-41ea-a699-e73fa1d605df","plan_interval":"mensal","plan_id":"plano_basico_mensal"},"money_release_date":"2025-02-28T09:37:17.000-04:00","money_release_schema":null,"money_release_status":"released","notification_url":null,"operation_type":"regular_payment","order":{"id":"28933837165","type":"mercadopago"},"payer":{"email":"test_user_1372776159@testuser.com","entity_type":null,"first_name":null,"id":"2296440702","identification":{"number":"11111111111","type":"CPF"},"last_name":null,"operator_id":null,"phone":{"number":null,"extension":null,"area_code":null},"type":null},"payment_method":{"id":"account_money","issuer_id":"2007","type":"account_money"},"payment_method_id":"account_money","payment_type_id":"account_money","platform_id":null,"point_of_interaction":{"business_info":{"branch":"Merchant Services","sub_unit":"checkout_pro","unit":"online_payments"},"transaction_data":{"e2e_id":null},"type":"CHECKOUT"},"pos_id":null,"processing_mode":"aggregator","refunds":[],"release_info":null,"shipping_amount":0,"sponsor_id":null,"statement_descriptor":null,"status":"approved","status_detail":"accredited","store_id":null,"tags":null,"taxes_amount":0,"transaction_amount":19.99,"transaction_amount_refunded":0,"transaction_details":{"acquirer_reference":null,"external_resource_url":null,"financial_institution":null,"installment_amount":0,"net_received_amount":18.99,"overpaid_amount":0,"payable_deferral_period":null,"payment_method_reference_id":null,"total_paid_amount":19.99}}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","15ec2452-1964-4867-a436-bf857cf0fb16","log","1740753120180638"
+"Dados do pagamento obtidos: {"accounts_info":null,"acquirer_reconciliation":[],"additional_info":{"ip_address":"131.221.15.66","items":[{"description":"Assinatura mensal do Maguinho","id":"plano_basico_mensal","quantity":"1","title":"Plano Básico","unit_price":"19.99"}],"payer":{"first_name":"Ian Lucas Beé"},"tracking_id":"platform:v1-blacklabel,so:ALL,type:N/A,security:none"},"authorization_code":null,"binary_mode":false,"brand_id":null,"build_version":"3.94.0-rc-36","call_for_authorize_id":null,"captured":true,"card":{},"charges_details":[{"accounts":{"from":"collector","to":"mp"},"amounts":{"original":1,"refunded":0},"client_id":0,"date_created":"2025-02-28T09:37:17.000-04:00","id":"103305640381-001","last_updated":"2025-02-28T09:37:17.000-04:00","metadata":{"source":"rule-engine"},"name":"mercadopago_fee","refund_charges":[],"reserve_id":null,"type":"fee"}],"charges_execution_info":{"internal_execution":{"date":"2025-02-28T09:37:17.649-04:00","execution_id":"01JN6CD58YQAHSPGFB2QRB49Z1"}},"collector_id":2293113905,"corporation_id":null,"counter_currency":null,"coupon_amount":0,"currency_id":"BRL","date_approved":"2025-02-28T09:37:17.000-04:00","date_created":"2025-02-28T09:37:17.000-04:00","date_last_updated":"2025-02-28T09:37:22.000-04:00","date_of_expiration":null,"deduction_schema":null,"description":"Plano Básico","differential_pricing_id":null,"external_reference":"518d7220-f0e0-41ea-a699-e73fa1d605df","fee_details":[{"amount":1,"fee_payer":"collector","type":"mercadopago_fee"}],"financing_group":null,"id":103305640381,"installments":1,"integrator_id":null,"issuer_id":"2007","live_mode":true,"marketplace_owner":null,"merchant_account_id":null,"merchant_number":null,"metadata":{"user_id":"518d7220-f0e0-41ea-a699-e73fa1d605df","plan_interval":"mensal","plan_id":"plano_basico_mensal"},"money_release_date":"2025-02-28T09:37:17.000-04:00","money_release_schema":null,"money_release_status":"released","notification_url":null,"operation_type":"regular_payment","order":{"id":"28933837165","type":"mercadopago"},"payer":{"email":"test_user_1372776159@testuser.com","entity_type":null,"first_name":null,"id":"2296440702","identification":{"number":"11111111111","type":"CPF"},"last_name":null,"operator_id":null,"phone":{"number":null,"extension":null,"area_code":null},"type":null},"payment_method":{"id":"account_money","issuer_id":"2007","type":"account_money"},"payment_method_id":"account_money","payment_type_id":"account_money","platform_id":null,"point_of_interaction":{"business_info":{"branch":"Merchant Services","sub_unit":"checkout_pro","unit":"online_payments"},"transaction_data":{"e2e_id":null},"type":"CHECKOUT"},"pos_id":null,"processing_mode":"aggregator","refunds":[],"release_info":null,"shipping_amount":0,"sponsor_id":null,"statement_descriptor":null,"status":"approved","status_detail":"accredited","store_id":null,"tags":null,"taxes_amount":0,"transaction_amount":19.99,"transaction_amount_refunded":0,"transaction_details":{"acquirer_reference":null,"external_resource_url":null,"financial_institution":null,"installment_amount":0,"net_received_amount":18.99,"overpaid_amount":0,"payable_deferral_period":null,"payment_method_reference_id":null,"total_paid_amount":19.99}}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","9d25c746-b1ca-458a-9c3a-d4e3f1714bd7","log","1740753120180451"
+"Obtendo detalhes do pagamento: 103305640381
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","6917921f-c576-4d1c-9196-3b0ca82d24a0","log","1740753120180224"
+"Token de acesso obtido com sucesso
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","acaee59b-d8f4-45f6-8ec6-a139fc050df8","log","1740753120180078"
+"Tentando obter token de acesso com Client ID e Secret
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","e8c5283e-8ee1-4ff8-a876-30145543c3e5","log","1740753120179678"
+"Gerando novo token com Client ID e Client Secret
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","6ad05283-e2bd-4fc6-be96-4105e130a48d","log","1740753120179508"
+"Obtendo token para API do Mercado Pago
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","221cd73d-d49c-4fce-bd84-538e0ee656cc","log","1740753120179364"
+"ID do pagamento extraído: 103305640381
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","1bf61b5c-81a7-432b-82f5-55b32c5a2c1c","log","1740753120179187"
+"Tipo de notificação: payment
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","57461210-524c-43ef-9d2f-1e5ff8c25df0","log","1740753120178972"
+"Dados do webhook recebidos: {"action":"payment.created","api_version":"v1","data":{"id":"103305640381"},"date_created":"2025-02-28T13:37:17Z","id":119436119627,"live_mode":true,"type":"payment","user_id":"2293113905"}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","81288c37-7dd2-4eb4-a85c-b6f3d04bf896","log","1740753120178708"
+"Headers da requisição: {"accept":"application/json","accept-encoding":"gzip","cdn-loop":"cloudflare; loops=1; subreqs=1","cf-connecting-ip":"18.215.140.160","cf-ew-via":"15","cf-ray":"91911f0c54595a09-IAD","cf-visitor":"{\"scheme\":\"https\"}","cf-worker":"supabase.co","content-length":"189","content-type":"application/json","host":"edge-runtime.supabase.com","referer":"https://mercadopago.com.ar","user-agent":"MercadoPago WebHook v1.0 payment","x-amzn-trace-id":"Root=1-67c1c8de-0348ebf12a4444b53eba33a9","x-b3-sampled":"0","x-b3-spanid":"74b434dce289e8ef","x-b3-traceid":"74b434dce289e8ef","x-deno-subhost":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6InN1cGFiYXNlIn0.eyJwcm9qZWN0X3JlZiI6Inpzc2l0d2JkcHJmbnFnbHR0d2hzIiwibmFtZSI6InBheW1lbnQtd2ViaG9vayIsInBsYW4iOiJ0aWVyX2ZyZWUiLCJycGNfcm9vdCI6Imh0dHBzOi8vc3VwYWJhc2Utb3JpZ2luLmRlbm8uZGV2L3YwLyIsImV4cCI6MTc0MDc1NDAxOCwiaWF0IjoxNzQwNzUzMTE4fQ.B2AMHqd0cGZHPkRLEVBhYqbMCZWhwM4G3GjIN31NW0g","x-forwarded-for":"18.215.140.160,18.215.140.160, 99.82.165.78","x-forwarded-host":"edge-runtime.supabase.com","x-forwarded-port":"443","x-forwarded-proto":"https","x-request-id":"424b839a-d23d-49c7-83f6-247667a5c20f","x-rest-pool-name":"pool_unknown","x-signature":"ts=1740751582,v1=6972f37c6358e8300e2052cc44829e3a14c5c03ee15381dfb07e074f230d45aa","x-socket-timeout":"7000","x-trace-digest-09":"5N7a9JKQ/FRnhV0vNbyqSL7m7zwMU5XeGh3Khx52kBvNRVmRabMVoxr6bgT64KCqrW0GXBZ/CTyahQloQSnNcKDN3HUQVhi9WqjBmotT6rV7W+DWibfyAX1ngqkQbu9f"}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","970c85b7-2bfe-4d09-ad1f-ed155c6304c5","log","1740753120178496"
+"- URL: http://edge-runtime.supabase.com/payment-webhook?data.id=103305640381&type=payment
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","ef91300f-114a-49b4-8f2b-2ebe464b6542","log","1740753120178268"
+"- Método: POST
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","602dd9a7-d440-415e-b9f6-26a8282306cc","log","1740753120177990"
+"Requisição recebida:
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","e129bfed-2b44-4b94-bf2b-3fcb04be71d3","log","1740753120177788"
+"Listening on http://localhost:9999/
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","66ef1059-15c4-4170-80f5-4b576b368c53","log","1740753120177601"
+"Webhook Secret disponível: true
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","c88b4447-853c-4885-a825-d4f50412cb93","log","1740753120177441"
+"Client Secret disponível: true
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","78f8ad61-0425-4cd3-984e-72c8123cc0ac","log","1740753120177273"
+"Client ID disponível: true
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","2d7c4314-eafc-4589-a81d-071297e1f817","log","1740753120177058"
+"SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc2l0d2JkcHJmbnFnbHR0d2hzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAwNzI3NTgsImV4cCI6MjA1NTY0ODc1OH0.AeCt0v9vn_6tVmqdGshLDl63TtDjmfk_Z3VBLGcxVgU
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","b9675348-572c-4b79-a519-0d8f935296e4","log","1740753120176835"
+"SUPABASE_URL: https://zssitwbdprfnqglttwhs.supabase.co
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","870d6a0b-a9d4-4b14-b5bb-ade0a1c641e2","log","1740753120176606"
+"Ambiente: undefined
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","23bba971-cc40-4b2b-9a57-d8b8d08728e3","log","1740753120176362"
+"Iniciando webhook...
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","d039f70f-9709-4edf-8bd7-57e85b143a81","log","1740753120176135"
+"booted (time: 22ms)","Boot","cb83b72b-e483-448c-96c2-b34df3da85e0","0a0774e5-c7b1-45e1-bff1-275297b9b97c","log","1740753120175971"
+"shutdown","Shutdown","cb83b72b-e483-448c-96c2-b34df3da85e0","fc5cc807-4702-4b70-bae0-6f0fe60fd14e","log","1740753019462122"
+"Erro ao processar pagamento: Error: ID de preferência não encontrado no pagamento
+    at processPayment (file:///projects/maguinho/supabase/functions/payment-webhook/index.ts:204:13)
+    at Server.<anonymous> (file:///projects/maguinho/supabase/functions/payment-webhook/index.ts:178:18)
+    at eventLoopTick (ext:core/01_core.js:168:7)
+    at async #respond (https://deno.land/std@0.177.0/http/server.ts:220:18)
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","159c917b-3619-4f92-afea-303d7bacaf11","error","1740752949430379"
+"ID de preferência não encontrado no pagamento
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","4439de69-279f-4f0e-9147-7c7d0493c9d5","error","1740752949430191"
+"Preference ID encontrado: undefined
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","7895442a-1c36-44f0-8f44-119a7db19336","log","1740752949430034"
+"Processando pagamento: {"accounts_info":null,"acquirer_reconciliation":[],"additional_info":{"ip_address":"131.221.15.66","items":[{"description":"Assinatura mensal do Maguinho","id":"plano_basico_mensal","quantity":"1","title":"Plano Básico","unit_price":"19.99"}],"payer":{"first_name":"Ian Lucas Beé"},"tracking_id":"platform:v1-blacklabel,so:ALL,type:N/A,security:none"},"authorization_code":null,"binary_mode":false,"brand_id":null,"build_version":"3.94.0-rc-36","call_for_authorize_id":null,"captured":true,"card":{},"charges_details":[{"accounts":{"from":"collector","to":"mp"},"amounts":{"original":1,"refunded":0},"client_id":0,"date_created":"2025-02-28T10:18:49.000-04:00","id":"103710693812-001","last_updated":"2025-02-28T10:18:49.000-04:00","metadata":{"source":"rule-engine"},"name":"mercadopago_fee","refund_charges":[],"reserve_id":null,"type":"fee"}],"charges_execution_info":{"internal_execution":{"date":"2025-02-28T10:18:49.615-04:00","execution_id":"01JN6ES6SW5972TPF0AFK51AF4"}},"collector_id":2293113905,"corporation_id":null,"counter_currency":null,"coupon_amount":0,"currency_id":"BRL","date_approved":"2025-02-28T10:18:49.000-04:00","date_created":"2025-02-28T10:18:49.000-04:00","date_last_updated":"2025-02-28T10:18:54.000-04:00","date_of_expiration":null,"deduction_schema":null,"description":"Plano Básico","differential_pricing_id":null,"external_reference":"518d7220-f0e0-41ea-a699-e73fa1d605df","fee_details":[{"amount":1,"fee_payer":"collector","type":"mercadopago_fee"}],"financing_group":null,"id":103710693812,"installments":1,"integrator_id":null,"issuer_id":"2007","live_mode":true,"marketplace_owner":null,"merchant_account_id":null,"merchant_number":null,"metadata":{"user_id":"518d7220-f0e0-41ea-a699-e73fa1d605df","plan_interval":"mensal","plan_id":"plano_basico_mensal"},"money_release_date":"2025-02-28T10:18:49.000-04:00","money_release_schema":null,"money_release_status":"released","notification_url":null,"operation_type":"regular_payment","order":{"id":"28935464653","type":"mercadopago"},"payer":{"email":"test_user_1372776159@testuser.com","entity_type":null,"first_name":null,"id":"2296440702","identification":{"number":"11111111111","type":"CPF"},"last_name":null,"operator_id":null,"phone":{"number":null,"extension":null,"area_code":null},"type":null},"payment_method":{"id":"account_money","issuer_id":"2007","type":"account_money"},"payment_method_id":"account_money","payment_type_id":"account_money","platform_id":null,"point_of_interaction":{"business_info":{"branch":"Merchant Services","sub_unit":"checkout_pro","unit":"online_payments"},"transaction_data":{"e2e_id":null},"type":"CHECKOUT"},"pos_id":null,"processing_mode":"aggregator","refunds":[],"release_info":null,"shipping_amount":0,"sponsor_id":null,"statement_descriptor":null,"status":"approved","status_detail":"accredited","store_id":null,"tags":null,"taxes_amount":0,"transaction_amount":19.99,"transaction_amount_refunded":0,"transaction_details":{"acquirer_reference":null,"external_resource_url":null,"financial_institution":null,"installment_amount":0,"net_received_amount":18.99,"overpaid_amount":0,"payable_deferral_period":null,"payment_method_reference_id":null,"total_paid_amount":19.99}}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","0d225d3b-d302-4e54-a315-c36b873cb12e","log","1740752949429775"
+"Dados do pagamento obtidos: {"accounts_info":null,"acquirer_reconciliation":[],"additional_info":{"ip_address":"131.221.15.66","items":[{"description":"Assinatura mensal do Maguinho","id":"plano_basico_mensal","quantity":"1","title":"Plano Básico","unit_price":"19.99"}],"payer":{"first_name":"Ian Lucas Beé"},"tracking_id":"platform:v1-blacklabel,so:ALL,type:N/A,security:none"},"authorization_code":null,"binary_mode":false,"brand_id":null,"build_version":"3.94.0-rc-36","call_for_authorize_id":null,"captured":true,"card":{},"charges_details":[{"accounts":{"from":"collector","to":"mp"},"amounts":{"original":1,"refunded":0},"client_id":0,"date_created":"2025-02-28T10:18:49.000-04:00","id":"103710693812-001","last_updated":"2025-02-28T10:18:49.000-04:00","metadata":{"source":"rule-engine"},"name":"mercadopago_fee","refund_charges":[],"reserve_id":null,"type":"fee"}],"charges_execution_info":{"internal_execution":{"date":"2025-02-28T10:18:49.615-04:00","execution_id":"01JN6ES6SW5972TPF0AFK51AF4"}},"collector_id":2293113905,"corporation_id":null,"counter_currency":null,"coupon_amount":0,"currency_id":"BRL","date_approved":"2025-02-28T10:18:49.000-04:00","date_created":"2025-02-28T10:18:49.000-04:00","date_last_updated":"2025-02-28T10:18:54.000-04:00","date_of_expiration":null,"deduction_schema":null,"description":"Plano Básico","differential_pricing_id":null,"external_reference":"518d7220-f0e0-41ea-a699-e73fa1d605df","fee_details":[{"amount":1,"fee_payer":"collector","type":"mercadopago_fee"}],"financing_group":null,"id":103710693812,"installments":1,"integrator_id":null,"issuer_id":"2007","live_mode":true,"marketplace_owner":null,"merchant_account_id":null,"merchant_number":null,"metadata":{"user_id":"518d7220-f0e0-41ea-a699-e73fa1d605df","plan_interval":"mensal","plan_id":"plano_basico_mensal"},"money_release_date":"2025-02-28T10:18:49.000-04:00","money_release_schema":null,"money_release_status":"released","notification_url":null,"operation_type":"regular_payment","order":{"id":"28935464653","type":"mercadopago"},"payer":{"email":"test_user_1372776159@testuser.com","entity_type":null,"first_name":null,"id":"2296440702","identification":{"number":"11111111111","type":"CPF"},"last_name":null,"operator_id":null,"phone":{"number":null,"extension":null,"area_code":null},"type":null},"payment_method":{"id":"account_money","issuer_id":"2007","type":"account_money"},"payment_method_id":"account_money","payment_type_id":"account_money","platform_id":null,"point_of_interaction":{"business_info":{"branch":"Merchant Services","sub_unit":"checkout_pro","unit":"online_payments"},"transaction_data":{"e2e_id":null},"type":"CHECKOUT"},"pos_id":null,"processing_mode":"aggregator","refunds":[],"release_info":null,"shipping_amount":0,"sponsor_id":null,"statement_descriptor":null,"status":"approved","status_detail":"accredited","store_id":null,"tags":null,"taxes_amount":0,"transaction_amount":19.99,"transaction_amount_refunded":0,"transaction_details":{"acquirer_reference":null,"external_resource_url":null,"financial_institution":null,"installment_amount":0,"net_received_amount":18.99,"overpaid_amount":0,"payable_deferral_period":null,"payment_method_reference_id":null,"total_paid_amount":19.99}}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","8ba70779-4c2a-4f81-ac46-113dda9ef50f","log","1740752949429522"
+"Obtendo detalhes do pagamento: 103710693812
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","83ca7bb4-ab26-4001-beca-4797bc1a3906","log","1740752949429065"
+"Token de acesso obtido com sucesso
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","f13e2b3f-4678-4013-955b-3110f3ada658","log","1740752949428805"
+"Tentando obter token de acesso com Client ID e Secret
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","fdc096f2-d3f8-4c3d-bdfc-8da889b0e47a","log","1740752944435931"
+"Gerando novo token com Client ID e Client Secret
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","e613fa51-5557-4ae7-a2dc-d46b0f3701a1","log","1740752944435686"
+"Obtendo token para API do Mercado Pago
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","08a4de8f-767e-49e3-a371-99b8b4cc2667","log","1740752944435429"
+"ID do pagamento extraído: 103710693812
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","6b7adbee-3e50-4300-ae25-d7e5c07b93a4","log","1740752944435175"
+"Tipo de notificação: payment
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","9d5d36cf-d9e5-44c3-8c2d-b92b994630d5","log","1740752944434017"
+"Dados do webhook recebidos: {"action":"payment.created","api_version":"v1","data":{"id":"103710693812"},"date_created":"2025-02-28T14:18:49Z","id":119435828889,"live_mode":true,"type":"payment","user_id":"2293113905"}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","c25e2a38-d7da-4154-927f-a48d091a3678","log","1740752944433779"
+"Headers da requisição: {"accept-encoding":"gzip","cdn-loop":"cloudflare; loops=1; subreqs=1","cf-connecting-ip":"131.221.15.66","cf-ew-via":"15","cf-ray":"91911ac2b4e9f22b-GRU","cf-visitor":"{\"scheme\":\"https\"}","cf-worker":"supabase.co","content-length":"231","content-type":"application/json","host":"edge-runtime.supabase.com","user-agent":"Mozilla/5.0 (Windows NT; Windows NT 10.0; pt-BR) WindowsPowerShell/5.1.19041.3803","x-amzn-trace-id":"Root=1-67c1c82e-757611e632c752d4090b973c","x-deno-subhost":"eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiIsImtpZCI6InN1cGFiYXNlIn0.eyJwcm9qZWN0X3JlZiI6Inpzc2l0d2JkcHJmbnFnbHR0d2hzIiwibmFtZSI6InBheW1lbnQtd2ViaG9vayIsInBsYW4iOiJ0aWVyX2ZyZWUiLCJycGNfcm9vdCI6Imh0dHBzOi8vc3VwYWJhc2Utb3JpZ2luLmRlbm8uZGV2L3YwLyIsImV4cCI6MTc0MDc1Mzg0MiwiaWF0IjoxNzQwNzUyOTQyfQ.QpNojkwbRpLaEjLDunv9yo3a4Wp5UiiREH4K-ID7Djg","x-forwarded-for":"131.221.15.66,131.221.15.66, 99.82.164.137","x-forwarded-host":"edge-runtime.supabase.com","x-forwarded-port":"443","x-forwarded-proto":"https"}
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","585d36a5-bc75-464d-a95d-90ba98d7ae98","log","1740752944433520"
+"- URL: http://edge-runtime.supabase.com/payment-webhook
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","d8d798be-c651-4719-a9ee-904cca01129e","log","1740752944433304"
+"- Método: POST
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","744a4e48-2364-4163-8342-4d724ffaeb84","log","1740752944433083"
+"Requisição recebida:
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","49adf2c4-d510-442d-90d6-f2bfd19342b4","log","1740752944432823"
+"Listening on http://localhost:9999/
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","a0c2d515-06ca-4e2c-80ff-f39d205cbcc1","log","1740752944432575"
+"Webhook Secret disponível: true
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","afc485e5-1a8f-4b49-8592-82beefe619ad","log","1740752944432320"
+"Client Secret disponível: true
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","95c02498-21f4-47ee-9b88-17fbf8652316","log","1740752944432059"
+"Client ID disponível: true
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","6aeff0bd-eaec-4e02-921c-6d065a6e30c0","log","1740752944431813"
+"SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc2l0d2JkcHJmbnFnbHR0d2hzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAwNzI3NTgsImV4cCI6MjA1NTY0ODc1OH0.AeCt0v9vn_6tVmqdGshLDl63TtDjmfk_Z3VBLGcxVgU
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","83e60515-e910-417e-8f17-b85a9cc27015","log","1740752944430743"
+"SUPABASE_URL: https://zssitwbdprfnqglttwhs.supabase.co
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","031fd1f6-52d3-44d6-8d89-8ab4e1b7b4e3","log","1740752944428971"
+"Ambiente: undefined
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","198c0366-16e7-4484-a301-b451f05e4018","log","1740752944428605"
+"Iniciando webhook...
+","Log","cb83b72b-e483-448c-96c2-b34df3da85e0","c0bd5cc5-beda-4d79-9d3f-730c3c074f30","log","1740752944428136"
+"booted (time: 208ms)","Boot","cb83b72b-e483-448c-96c2-b34df3da85e0","9785c20f-1ebb-4365-8e44-ee1bab76107a","log","1740752944427888"
+
+payment-webhook-public logs ultimos 15 minutos:
+"event_message","event_type","function_id","id","level","timestamp"
+"shutdown","Shutdown","0ad7c254-4476-45d2-98e5-a70e1b948374","e1798d59-19ca-4b37-b24e-49421176e3bc","log","1740753896791482"
+"shutdown","Shutdown","0ad7c254-4476-45d2-98e5-a70e1b948374","900a35fa-bb14-4d45-a1ab-90865a4dec3d","log","1740753881713391"
+"shutdown","Shutdown","0ad7c254-4476-45d2-98e5-a70e1b948374","ce4daec6-8acd-46a7-b730-e32fd42ce1a5","log","1740753844090373"
+"Ação não tratada: updated
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","6e6e71c6-2698-457d-bedd-2edaf922d6d7","log","1740753821770929"
+"Dados do pagamento: {"id":"123456"}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","ace3de9f-7df0-41ef-bd08-dbf50d69c452","log","1740753821770592"
+"ID da notificação: 123456
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","deda94fe-1f52-47a6-a081-cb5f96f009b8","log","1740753821770294"
+"Tipo de notificação: updated
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","0202d193-e61a-4e09-b7af-d4f790850012","log","1740753821770051"
+"Corpo da requisição: {"action":"updated","application_id":"4451217525003945","data":{"id":"123456"},"date":"2021-11-01T02:02:02Z","entity":"preapproval","id":"123456","type":"subscription_preapproval","version":8}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","6d5f84ca-f63f-409d-a7ce-0e8ee222e589","log","1740753821769800"
+"- URL: http://edge-runtime.supabase.com/payment-webhook-public?data.id=123456&type=subscription_authorized_payment
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","e18ea8ac-aa9a-43d7-9aee-df768ccab5f8","log","1740753821769579"
+"- Método: POST
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","28006631-e728-4bbd-8be6-35a8eae0f39a","log","1740753821769341"
+"Requisição recebida:
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","fc5a3c3c-1e9d-4cc5-b5b5-be42d0620d4c","log","1740753821769093"
+"Listening on http://localhost:9999/
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","fa5ffcac-cf2c-4eac-8113-5f6eb34cf171","log","1740753821768868"
+"Webhook Secret disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","9ce24458-a0dc-40ca-af5e-c236d73167e4","log","1740753821768626"
+"Client Secret disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","97fd3a38-7733-43f8-b1ae-62f6b0e9d5a6","log","1740753821768279"
+"Client ID disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","d0ea0b6a-79d8-48f3-9b09-67aa547539d9","log","1740753821768013"
+"SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc2l0d2JkcHJmbnFnbHR0d2hzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAwNzI3NTgsImV4cCI6MjA1NTY0ODc1OH0.AeCt0v9vn_6tVmqdGshLDl63TtDjmfk_Z3VBLGcxVgU
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","32065125-a59b-410b-8686-089cafbbcfff","log","1740753821767760"
+"SUPABASE_URL: https://zssitwbdprfnqglttwhs.supabase.co
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","1462e1ac-1288-40e1-8d9b-5d8e7d6a5972","log","1740753821767539"
+"Ambiente: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","8902c206-dcf4-44bc-9ec1-9d2fadc398cb","log","1740753821767335"
+"Iniciando webhook-public...
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","f8026804-d69d-4272-b9ca-25f4822057bb","log","1740753821766871"
+"booted (time: 21ms)","Boot","0ad7c254-4476-45d2-98e5-a70e1b948374","f46ec1cd-e061-44a6-92e8-612fb36bdfbd","log","1740753821766634"
+"Erro ao processar pagamento: Error: ID de usuário não encontrado no pagamento
+    at processPayment (file:///projects/maguinho/supabase/functions/payment-webhook-public/index.ts:190:13)
+    at Server.<anonymous> (file:///projects/maguinho/supabase/functions/payment-webhook-public/index.ts:159:18)
+    at eventLoopTick (ext:core/01_core.js:168:7)
+    at async #respond (https://deno.land/std@0.177.0/http/server.ts:220:18)
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","e7a1e71f-cd34-4652-9e3c-f5b8c55edd1a","error","1740753806725252"
+"ID de usuário não encontrado no pagamento
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","9d33f0bf-214b-4421-a1ba-36abfcaaebd4","error","1740753806725082"
+"- plan_interval: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","6da6d45b-2ac3-4fcd-834b-0f18b67f66c3","log","1740753806724843"
+"- plan_id: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","40a43a38-17bd-4c33-9b3b-6f0bb1a07554","log","1740753806724567"
+"- user_id: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","ba40b947-7ee9-4841-ab00-67e69fe01376","log","1740753806724295"
+"Metadados encontrados:
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","04258344-2ca6-4827-876d-ff61ade50ace","log","1740753806724111"
+"Processando pagamento: {"id":"123456"}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","be75b5d0-9395-426a-841b-7dd07e914981","log","1740753806723959"
+"Detalhes do pagamento: {"id":"123456"}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","e9757ff5-5a19-4efc-b346-cb2ed0f1acf4","log","1740753806723814"
+"ID do pagamento: 123456
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","cf11789e-2167-4c9d-87ef-6cc369c9357b","log","1740753806723669"
+"Dados do pagamento: {"id":"123456"}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","1d7d2055-c494-4582-9891-15b4cbc2e9eb","log","1740753806723466"
+"ID da notificação: 123456
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","8c3457e5-afea-49a1-b408-23ed4f9dcb12","log","1740753806723061"
+"Tipo de notificação: payment.updated
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","7e301c24-0749-42d2-93d7-b0dce200b044","log","1740753806722816"
+"Corpo da requisição: {"action":"payment.updated","api_version":"v1","data":{"id":"123456"},"date_created":"2021-11-01T02:02:02Z","id":"123456","live_mode":false,"type":"payment","user_id":2293113905}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","894a6890-6688-4aa9-bfc9-2b3d834aaf20","log","1740753806722678"
+"- URL: http://edge-runtime.supabase.com/payment-webhook-public?data.id=123456&type=payment
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","fb28da83-70da-484a-9051-50c1b4aa48f4","log","1740753806722503"
+"- Método: POST
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","0929cfd0-1eba-44dc-b120-f920c2891042","log","1740753806722278"
+"Requisição recebida:
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","9d27b533-e118-4491-8d72-b23829d9595d","log","1740753806722090"
+"Listening on http://localhost:9999/
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","d1fea5f2-6ab7-4032-9b8c-9dba2ebe2fc5","log","1740753806721868"
+"Webhook Secret disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","eaf93e98-5d80-44dc-b9d5-688fc7c87ad6","log","1740753806721595"
+"Client Secret disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","de274985-865e-43bc-b4c4-aac876d971b9","log","1740753806721368"
+"Client ID disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","0c35ecd4-3bc1-43bd-bde6-af4946e11b65","log","1740753806721111"
+"SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc2l0d2JkcHJmbnFnbHR0d2hzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAwNzI3NTgsImV4cCI6MjA1NTY0ODc1OH0.AeCt0v9vn_6tVmqdGshLDl63TtDjmfk_Z3VBLGcxVgU
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","8c5ed047-2b20-4ddd-8ddd-ba7b26c8ded1","log","1740753806720888"
+"SUPABASE_URL: https://zssitwbdprfnqglttwhs.supabase.co
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","bfbd0dfb-91e0-4efb-ae96-71a84068eb08","log","1740753806720521"
+"Ambiente: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","e4b16737-1671-4b44-9424-d4346abfe963","log","1740753806720315"
+"Iniciando webhook-public...
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","eac2ac54-dc6d-4388-b11c-0e773fc5ac2b","log","1740753806720172"
+"booted (time: 23ms)","Boot","0ad7c254-4476-45d2-98e5-a70e1b948374","9343f14d-25a7-4646-8eb0-70af8798753f","log","1740753806719981"
+"shutdown","Shutdown","0ad7c254-4476-45d2-98e5-a70e1b948374","a22a5ecf-2f66-41b5-891e-3f934a34d23a","log","1740753782792454"
+"shutdown","Shutdown","0ad7c254-4476-45d2-98e5-a70e1b948374","35a02eb1-6c61-4a00-a770-77851cc62848","log","1740753780319732"
+"Erro ao processar pagamento: Error: ID de usuário não encontrado no pagamento
+    at processPayment (file:///projects/maguinho/supabase/functions/payment-webhook-public/index.ts:190:13)
+    at Server.<anonymous> (file:///projects/maguinho/supabase/functions/payment-webhook-public/index.ts:159:18)
+    at eventLoopTick (ext:core/01_core.js:168:7)
+    at async #respond (https://deno.land/std@0.177.0/http/server.ts:220:18)
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","ea675ef9-3dc4-4df8-8041-548c81217116","error","1740753769068106"
+"ID de usuário não encontrado no pagamento
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","aa6dd413-e0f4-49ab-86d1-59d80b32a50c","error","1740753769067740"
+"- plan_interval: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","a66cf94b-a388-442a-ae47-755f76ffb6c2","log","1740753769067506"
+"- plan_id: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","e2f832f3-7d8b-45dc-8447-f34da73694c9","log","1740753769066938"
+"- user_id: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","9b00813d-c454-4768-9dff-db0c84e109f4","log","1740753769066675"
+"Metadados encontrados:
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","ac6edf36-971c-4c10-a839-9f1f1b9491a0","log","1740753769066203"
+"Processando pagamento: {"id":"123456"}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","6ea494f2-e1b6-404a-b9bf-b2b27bd04af6","log","1740753769065934"
+"Detalhes do pagamento: {"id":"123456"}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","e1028985-4165-4533-8518-3668bb69afd1","log","1740753769065567"
+"ID do pagamento: 123456
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","33b40e6f-942c-419c-9865-d114ddcbf106","log","1740753769065208"
+"Dados do pagamento: {"id":"123456"}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","9b65ddb4-1c99-4ddd-b468-d0cc78e07a36","log","1740753769064778"
+"ID da notificação: 123456
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","1bcdb7f1-50c8-47b6-b113-403f8b68d736","log","1740753769064475"
+"Tipo de notificação: payment.updated
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","04e11be9-13dc-4139-a2df-f13320ef78ff","log","1740753769064144"
+"Corpo da requisição: {"action":"payment.updated","api_version":"v1","data":{"id":"123456"},"date_created":"2021-11-01T02:02:02Z","id":"123456","live_mode":false,"type":"payment","user_id":2293113905}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","1902b78f-86af-4e97-ad6c-c75640c04a16","log","1740753769063860"
+"- URL: http://edge-runtime.supabase.com/payment-webhook-public?data.id=123456&type=payment
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","7c9725c4-2426-4de4-9ec7-216f2aeff186","log","1740753769063477"
+"- Método: POST
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","795c6745-9f1e-40c4-bfe4-a6fcace45668","log","1740753769063189"
+"Requisição recebida:
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","5e1435ae-52d9-4673-8485-27bbb669397f","log","1740753769062818"
+"Listening on http://localhost:9999/
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","40803b54-b220-4c47-928d-07a13865379a","log","1740753769062309"
+"Webhook Secret disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","8fbfb767-d4c6-4ce5-8fa3-45f217211ff0","log","1740753769061791"
+"Client Secret disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","9339a34a-55cd-4f7d-b13a-cb2e0b5b31c7","log","1740753769061385"
+"Client ID disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","18aedef1-f182-4163-a801-7248e0fbf65f","log","1740753769060943"
+"SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc2l0d2JkcHJmbnFnbHR0d2hzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAwNzI3NTgsImV4cCI6MjA1NTY0ODc1OH0.AeCt0v9vn_6tVmqdGshLDl63TtDjmfk_Z3VBLGcxVgU
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","417bf805-9189-4559-aee3-da8dca0b6e47","log","1740753769060601"
+"SUPABASE_URL: https://zssitwbdprfnqglttwhs.supabase.co
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","2ab894de-d04f-4742-9337-36a804424ef5","log","1740753769060083"
+"Ambiente: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","1016eb62-f8c4-426f-a64a-8e971cf99280","log","1740753769059730"
+"Iniciando webhook-public...
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","83c165f4-d7eb-4204-816d-e57c89e7528d","log","1740753769058942"
+"booted (time: 23ms)","Boot","0ad7c254-4476-45d2-98e5-a70e1b948374","fe4b8b13-8194-445f-8b1b-9957c609c89b","log","1740753769058672"
+"shutdown","Shutdown","0ad7c254-4476-45d2-98e5-a70e1b948374","469af22c-9da9-41ea-bc7d-a57d1e42c35a","log","1740753738239053"
+"Erro ao processar pagamento: Error: ID de usuário não encontrado no pagamento
+    at processPayment (file:///projects/maguinho/supabase/functions/payment-webhook-public/index.ts:190:13)
+    at Server.<anonymous> (file:///projects/maguinho/supabase/functions/payment-webhook-public/index.ts:159:18)
+    at eventLoopTick (ext:core/01_core.js:168:7)
+    at async #respond (https://deno.land/std@0.177.0/http/server.ts:220:18)
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","02aebec6-fe0d-44bc-82dd-f250ccbd77c2","error","1740753707783994"
+"ID de usuário não encontrado no pagamento
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","fd05d0b8-d176-43d6-a813-2631691a2255","error","1740753707783766"
+"- plan_interval: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","aaa30cfc-2ca1-4cb1-9213-8c8e9799dcfa","log","1740753707783558"
+"- plan_id: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","8d2d809f-c6b3-419d-95f0-0b386b8bc093","log","1740753707783353"
+"- user_id: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","e53a8610-3bef-4c9e-84c0-693ad8489f38","log","1740753707783128"
+"Metadados encontrados:
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","d5c4fc54-6089-49f1-a514-b08fd6f310a1","log","1740753707782808"
+"Processando pagamento: {"id":"103312460533"}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","1160220a-fb1b-46e6-a770-e82d4dc6f64d","log","1740753707782587"
+"Detalhes do pagamento: {"id":"103312460533"}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","31c96799-4744-4766-a441-542e4ea1582e","log","1740753707782341"
+"ID do pagamento: 103312460533
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","005ebdfe-d5fe-44e3-9241-308060437408","log","1740753707782136"
+"Dados do pagamento: {"id":"103312460533"}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","efabc932-c437-4fa3-b9af-bd19e2577c81","log","1740753707781886"
+"ID da notificação: 119434562417
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","24b4a938-0d53-43ee-896d-acbd57c5968b","log","1740753707781618"
+"Tipo de notificação: payment.created
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","4755a16c-7de7-452a-b777-2519138bb225","log","1740753707781271"
+"Corpo da requisição: {"action":"payment.created","api_version":"v1","data":{"id":"103312460533"},"date_created":"2025-02-28T14:40:58Z","id":119434562417,"live_mode":true,"type":"payment","user_id":"2293113905"}
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","dfd41409-1c0e-4487-82f9-56a1b764ff72","log","1740753707781043"
+"- URL: http://edge-runtime.supabase.com/payment-webhook-public?data.id=103312460533&type=payment
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","33494168-f069-45ec-a8ac-21997a480448","log","1740753707780898"
+"- Método: POST
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","5b832218-4d0e-433f-9fe3-96f5a9d76b19","log","1740753707780679"
+"Requisição recebida:
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","f3d1b905-c820-4e85-af7a-c756a817b4f1","log","1740753707780459"
+"Listening on http://localhost:9999/
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","8eaa7e67-4679-44f4-9c8f-d05ddcfbe1fd","log","1740753707780241"
+"Webhook Secret disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","184f815a-e5b8-4060-ac78-4fc7c002c32f","log","1740753707780020"
+"Client Secret disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","466d4fd9-22a9-409a-a77e-92e740c1b8c8","log","1740753707779779"
+"Client ID disponível: true
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","4597b61c-4ced-4770-985a-5c1f1368ff5c","log","1740753707779575"
+"SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inpzc2l0d2JkcHJmbnFnbHR0d2hzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDAwNzI3NTgsImV4cCI6MjA1NTY0ODc1OH0.AeCt0v9vn_6tVmqdGshLDl63TtDjmfk_Z3VBLGcxVgU
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","90a44163-7d92-48ba-96cd-6b716137b0a8","log","1740753707779359"
+"SUPABASE_URL: https://zssitwbdprfnqglttwhs.supabase.co
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","e4f6ddaf-9c9b-47b6-b511-8e3cc08e4858","log","1740753707779135"
+"Ambiente: undefined
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","0be54c60-5c0b-4ffe-b5a3-da99fe90866f","log","1740753707778917"
+"Iniciando webhook-public...
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","55490283-4792-47f4-bd30-b11be790750f","log","1740753707778674"
+"booted (time: 22ms)","Boot","0ad7c254-4476-45d2-98e5-a70e1b948374","b98e4afa-9741-4415-9662-febf32d1d206","log","1740753707778323"
+"Erro ao processar pagamento: Error: ID de usuário não encontrado no pagamento
+    at processPayment (file:///projects/maguinho/supabase/functions/payment-webhook-public/index.ts:190:13)
+    at Server.<anonymous> (file:///projects/maguinho/supabase/functions/payment-webhook-public/index.ts:159:18)
+    at eventLoopTick (ext:core/01_core.js:168:7)
+    at async #respond (https://deno.land/std@0.177.0/http/server.ts:220:18)
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","8def2802-8898-4d80-a853-38e67d17f027","error","1740753705298790"
+"ID de usuário não encontrado no pagamento
+","Log","0ad7c254-4476-45d2-98e5-a70e1b948374","51a095ed-3502-4d20-a8e9-d87dedc4faff","error","1740753705298642"

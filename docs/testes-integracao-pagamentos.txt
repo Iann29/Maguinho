@@ -135,6 +135,47 @@ Invoke-WebRequest -Uri "https://zssitwbdprfnqglttwhs.functions.supabase.co/payme
 - Resultado: Erro 401 Não Autorizado
 - Nenhum log na edge function
 
+## Teste do Webhook Público (28/02/2025)
+
+Recriamos a função de webhook com configuração `public_access: true` para evitar problemas de autenticação e reimplementamos a lógica de processamento para usar o campo `external_reference` ao invés de `preference_id`.
+
+Modificamos também a função para usar diretamente os dados da notificação, em vez de fazer uma nova requisição à API do Mercado Pago para obter os detalhes do pagamento.
+
+### Teste 1: Requisição direta com dados de teste
+
+```powershell
+Invoke-RestMethod -Uri "https://zssitwbdprfnqglttwhs.functions.supabase.co/payment-webhook-public" -Method POST -Body '{
+  "action": "payment.created",
+  "api_version": "v1",
+  "data": {
+    "id": "103710693812",
+    "transaction_amount": 49.90,
+    "status": "approved",
+    "payment_method_id": "pix",
+    "external_reference": "123456",
+    "metadata": {
+      "user_id": "123456",
+      "plan_id": "2",
+      "plan_interval": "mensal"
+    }
+  },
+  "date_created": "2025-02-28T14:18:49Z",
+  "id": 119435828889,
+  "live_mode": true,
+  "type": "payment",
+  "user_id": "2293113905"
+}' -ContentType "application/json"
+```
+
+Resultado: Erro 500 (Interno do Servidor).
+
+### Próximos passos:
+
+1. Verificar os logs da função no Supabase para identificar o erro específico
+2. Corrigir a função com base nos erros encontrados
+3. Atualizar a URL do webhook no Mercado Pago para apontar para a nova função pública
+4. Realizar um teste completo de pagamento
+
 ## Problemas Identificados
 
 1. **Webhook não está funcionando**
@@ -150,17 +191,50 @@ Invoke-WebRequest -Uri "https://zssitwbdprfnqglttwhs.functions.supabase.co/payme
 3. **Interface de pagamento**
    - Status: Necessita melhorias estéticas e de usabilidade
 
-## Próximos Passos
+## Correções Realizadas (28/02/2025 - 11:46)
 
-1. Revisar configuração de segurança da edge function payment-webhook:
-   - Verificar se está definida como "no auth" ou "anon key"
-   - Confirmar que não há verificação JWT habilitada
+1. **Identificação do problema no webhook**:
+   - A notificação enviada pelo Mercado Pago contém apenas o ID do pagamento sem metadados completos
+   - A função estava tentando usar diretamente os dados da notificação em vez de buscar detalhes completos
 
-2. Corrigir a configuração da função payment-webhook para permitir requisições sem autenticação
+2. **Modificações realizadas**:
+   - Implementada lógica para buscar detalhes completos do pagamento na API do Mercado Pago usando o ID recebido na notificação
+   - Ajustado o processamento dos dados para trabalhar com a estrutura retornada pela API
+   - Melhorado o tratamento de erros e logs para facilitar diagnóstico futuro
 
-3. Testar webhook diretamente com um client HTTP que permita ver headers completos (Postman)
+3. **Estrutura da notificação real do Mercado Pago (exemplo)**:
+```json
+{
+  "action": "payment.created",
+  "api_version": "v1",
+  "data": {
+    "id": "103710693812"
+  },
+  "date_created": "2025-02-28T14:18:49Z",
+  "id": 119435828889,
+  "live_mode": true,
+  "type": "payment",
+  "user_id": "2293113905"
+}
+```
 
-4. Revisar e aprimorar a interface de pagamento no frontend após resolver o problema do webhook
+## Próximo Teste Planejado
+
+1. Atualizar a URL do webhook no Mercado Pago para apontar para a função pública corrigida
+2. Realizar um pagamento de teste completo
+3. Verificar os logs da função para confirmar que está recebendo e processando corretamente a notificação
+4. Verificar a criação dos registros nas tabelas:
+   - payments
+   - subscriptions
+   - financial_logs
+5. Confirmar que o status da assinatura do usuário está atualizado
+
+## Próximos passos:
+
+1. Verificar os logs da função no Supabase para identificar o erro específico
+2. Corrigir a função com base nos erros encontrados
+3. Atualizar a URL do webhook no Mercado Pago para apontar para a nova função pública
+4. Realizar um teste completo de pagamento
 
 ## Ações Tomadas (28/02 - 14:40)
 
