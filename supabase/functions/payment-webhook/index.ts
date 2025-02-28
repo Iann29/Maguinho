@@ -5,10 +5,12 @@ import { corsHeaders } from '../_shared/cors.ts'
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || ''
 const MP_WEBHOOK_SECRET = Deno.env.get('MP_WEBHOOK_SECRET') || ''
-const MP_ENVIRONMENT = Deno.env.get('MP_ENVIRONMENT') || 'TEST'
-const MP_ACCESS_TOKEN = MP_ENVIRONMENT === 'TEST' 
-  ? Deno.env.get('MP_TEST_ACCESS_TOKEN') || ''
-  : Deno.env.get('MP_PROD_ACCESS_TOKEN') || ''
+
+// Usar diretamente as credenciais de produção, pois são as que estão configuradas
+const MP_ACCESS_TOKEN = Deno.env.get('MP_PROD_ACCESS_TOKEN') || ''
+
+console.log('Token de acesso disponível:', !!MP_ACCESS_TOKEN);
+console.log('Webhook secret disponível:', !!MP_WEBHOOK_SECRET);
 
 serve(async (req) => {
   // Lidar com requisições OPTIONS para CORS
@@ -87,6 +89,8 @@ serve(async (req) => {
       
       // Se o pagamento foi aprovado, criar ou atualizar a assinatura
       if (status === 'approved' && paymentAttempt) {
+        console.log('Pagamento aprovado, atualizando assinatura para o usuário:', paymentAttempt.user_id);
+        
         // Calcular data de término com base no intervalo
         let endDate = new Date()
         switch (paymentAttempt.plan_interval) {
@@ -125,6 +129,8 @@ serve(async (req) => {
               payment_id: paymentId
             })
             .eq('user_id', paymentAttempt.user_id)
+            
+          console.log('Assinatura atualizada com sucesso');
         } else {
           // Criar nova assinatura
           await supabase
@@ -140,6 +146,8 @@ serve(async (req) => {
               end_date: endDate,
               payment_id: paymentId
             })
+            
+          console.log('Nova assinatura criada com sucesso');
         }
       }
     }

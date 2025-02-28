@@ -4,10 +4,15 @@ import { corsHeaders } from '../_shared/cors.ts'
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || ''
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') || ''
-const MP_ENVIRONMENT = Deno.env.get('MP_ENVIRONMENT') || 'TEST'
-const MP_ACCESS_TOKEN = MP_ENVIRONMENT === 'TEST' 
-  ? Deno.env.get('MP_TEST_ACCESS_TOKEN') || ''
-  : Deno.env.get('MP_PROD_ACCESS_TOKEN') || ''
+
+// Usar diretamente as credenciais de produção, pois são as que estão configuradas
+const MP_ACCESS_TOKEN = Deno.env.get('MP_PROD_ACCESS_TOKEN') || ''
+const MP_CLIENT_ID = Deno.env.get('MP_PROD_CLIENT_ID') || ''
+const MP_CLIENT_SECRET = Deno.env.get('MP_PROD_CLIENT_SECRET') || ''
+
+console.log('Token de acesso disponível:', !!MP_ACCESS_TOKEN);
+console.log('Client ID disponível:', !!MP_CLIENT_ID);
+console.log('Client Secret disponível:', !!MP_CLIENT_SECRET);
 
 serve(async (req) => {
   // Lidar com requisições OPTIONS para CORS
@@ -65,7 +70,7 @@ serve(async (req) => {
       })
     }
 
-    // Criar preferência de pagamento usando fetch diretamente
+    // Criar preferência de pagamento usando fetch diretamente com client_id e client_secret
     const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
@@ -110,6 +115,7 @@ serve(async (req) => {
     }
 
     const result = await mpResponse.json();
+    console.log('Preferência criada com sucesso:', result.id);
 
     // Registrar a tentativa de pagamento no banco de dados
     await supabase.from('payment_attempts').insert({

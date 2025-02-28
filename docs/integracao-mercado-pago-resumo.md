@@ -54,13 +54,25 @@
    - Problema: O SDK do Mercado Pago versão 1.5.16 exigia `client_id` e `client_secret` em vez de `access_token`.
    - Solução: Substituímos o uso do SDK por chamadas diretas à API REST do Mercado Pago usando `fetch`.
 
-2. **Verificação de assinatura do webhook**
+2. **Erro de autenticação com o Mercado Pago**
+   - Problema: Erro `client.id unauthorized to create preferences` ao tentar criar preferências de pagamento.
+   - Solução: Configuramos o código para usar diretamente as credenciais de produção (`MP_PROD_ACCESS_TOKEN`), que são as que estão configuradas para as contas de teste do Mercado Pago.
+
+3. **Confusão entre ambientes de teste e produção**
+   - Problema: O código estava tentando usar credenciais de teste (`MP_TEST_*`) que não estavam configuradas corretamente.
+   - Solução: Simplificamos o código para usar diretamente as credenciais de produção (`MP_PROD_*`), já que estamos usando contas de teste do Mercado Pago com credenciais de produção.
+
+4. **Verificação de assinatura do webhook**
    - Problema: A verificação da assinatura do webhook não estava implementada corretamente.
    - Solução: Implementamos a verificação básica da assinatura usando o cabeçalho `X-Signature`.
 
-3. **Processamento de notificações de pagamento**
+5. **Processamento de notificações de pagamento**
    - Problema: A função `payment-webhook` estava usando dados simulados em vez de buscar os detalhes reais do pagamento.
    - Solução: Implementamos a busca dos detalhes do pagamento diretamente da API do Mercado Pago.
+
+6. **Logs insuficientes para depuração**
+   - Problema: Era difícil identificar a causa dos erros sem logs detalhados.
+   - Solução: Adicionamos logs detalhados em pontos críticos do código para facilitar a depuração.
 
 ## Próximos Passos
 
@@ -84,14 +96,20 @@ Para que a integração funcione corretamente, você precisa configurar as segui
 ```
 SUPABASE_URL=https://zssitwbdprfnqglttwhs.supabase.co
 SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
-MP_ENVIRONMENT=TEST
-MP_CLIENT_ID=APP_USR-ba29b5dc-0ed5-4a3d-8ad1-34da5849af2b
-MP_TEST_ACCESS_TOKEN=TEST-6092624106422603-022608-5e3d23933649c4a4e2fb2f5a2c93c71e-1625315
-MP_PROD_ACCESS_TOKEN=APP_USR-6092624106422603-022608-5e3d23933649c4a4e2fb2f5a2c93c71e-1625315
+
+# Credenciais do Mercado Pago (Contas de Teste)
+MP_PROD_PUBLIC_KEY=APP_USR-ba29b5dc-0ed5-4a3d-8ad1-34da5849af2b
+MP_PROD_ACCESS_TOKEN=APP_USR-4451217525003945-022718-5caf0f64227417d65d327b2dcb7b7f4c-2293113905
+MP_PROD_CLIENT_ID=4451217525003945
+MP_PROD_CLIENT_SECRET=jkyPkKWNEy0HmDoE4oD3ml7TX6tFWFq2
+
+# Webhook
 MP_WEBHOOK_SECRET=4f4cdb697583ccb7d156f0513f8b6b27a5a7da8ea009c6c584c39e5bc146a3bb
 ```
 
-> **Nota**: O `MP_CLIENT_ID` é o mesmo valor que o Public Key do Mercado Pago.
+> **Importante**: Certifique-se de que todas essas variáveis estejam configuradas nas Edge Functions do Supabase.
+
+> **Nota**: Estamos usando as credenciais de produção (`MP_PROD_*`), mesmo para testes, pois estamos trabalhando com contas de teste do Mercado Pago.
 
 Para atualizar as variáveis de ambiente das Edge Functions no Supabase:
 1. Acesse o [Painel de Controle do Supabase](https://supabase.com/dashboard/project/zssitwbdprfnqglttwhs)
@@ -99,6 +117,7 @@ Para atualizar as variáveis de ambiente das Edge Functions no Supabase:
 3. Selecione a função `create-payment-preference`
 4. Clique em "Variáveis de Ambiente"
 5. Adicione ou atualize as variáveis acima
+6. Repita o processo para a função `payment-webhook`
 
 ## Atualização da Assinatura Secreta do Webhook
 
