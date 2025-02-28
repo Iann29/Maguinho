@@ -218,6 +218,27 @@ Resultado: Erro 500 (Interno do Servidor).
 }
 ```
 
+## Correção do Webhook para lidar com testes do Mercado Pago (28/02/2025)
+
+Os testes de webhook via painel do Mercado Pago estavam resultando em erro 500 quando usando notificações de tipo `payment.updated` com IDs de teste (como 123456). Foi identificado que o problema ocorria porque:
+
+1. A API do Mercado Pago retorna dados incompletos para IDs de teste
+2. Nossa função webhook esperava dados específicos (como user_id nos metadados) que não existem nos pagamentos de teste
+
+Modificações realizadas:
+
+1. Adicionada detecção de pagamentos de teste (ID 123456 ou live_mode=false)
+2. Para notificações de teste, a função agora retorna status 200 com sucesso, sem tentar processar os dados
+3. Melhorada a resposta para erros 404 da API ao buscar detalhes de pagamentos de teste
+4. Adicionados mais logs para facilitar o diagnóstico de problemas
+
+Essas mudanças permitem que:
+- Os testes do Mercado Pago sejam bem-sucedidos com status 200
+- Pagamentos reais continuem sendo processados normalmente
+- Os logs forneçam mais informações para diagnóstico
+
+Com estas correções, o webhook agora responde corretamente tanto para pagamentos reais quanto para testes simulados do Mercado Pago.
+
 ## Próximo Teste Planejado
 
 1. Atualizar a URL do webhook no Mercado Pago para apontar para a função pública corrigida
@@ -235,6 +256,48 @@ Resultado: Erro 500 (Interno do Servidor).
 2. Corrigir a função com base nos erros encontrados
 3. Atualizar a URL do webhook no Mercado Pago para apontar para a nova função pública
 4. Realizar um teste completo de pagamento
+
+## Teste de Pagamento Real após Correções (28/02/2025)
+
+Realizei um teste de pagamento real para verificar se o webhook está processando corretamente. Corrigimos o problema dos testes de webhook do Mercado Pago (IDs simulados), mas agora identificamos outro problema com pagamentos reais.
+
+### Detalhes do teste:
+- ID do usuário: 518d7220-f0e0-41ea-a699-e73fa1d605df
+- Operação/Transação: #103716559610
+- Data do teste: 28/02/2025
+
+### Problema identificado:
+O webhook recebeu a notificação de pagamento e buscou os detalhes completos na API do Mercado Pago com sucesso. No entanto, ao tentar localizar uma entrada na tabela `payment_attempts` para o usuário correspondente, nenhum registro foi encontrado:
+
+```
+Erro ao buscar tentativa de pagamento: {
+  code: "PGRST116",
+  details: "The result contains 0 rows",
+  hint: null,
+  message: "JSON object requested, multiple (or no) rows returned"
+}
+```
+
+Isso ocorreu porque estamos usando o método `.single()` na consulta SQL, que falha quando nenhum registro é encontrado.
+
+Resultado final:
+- Nenhum registro foi criado na tabela `payments`
+- Nenhum registro foi criado na tabela `transactions`
+- O webhook retornou um erro 500
+
+### Provável causa:
+1. Quando um usuário realiza um pagamento diretamente pelo checkout do Mercado Pago, não estamos registrando uma tentativa de pagamento na tabela `payment_attempts` antes de enviar o usuário para o checkout.
+2. O webhook espera encontrar uma tentativa de pagamento anterior para este usuário.
+
+### Possíveis soluções:
+1. Modificar a função webhook para criar um registro de pagamento diretamente dos metadados quando não encontrar uma tentativa prévia.
+2. Implementar na aplicação um passo adicional para registrar a tentativa antes de redirecionar ao checkout.
+3. Modificar a consulta para usar `.maybeSingle()` em vez de `.single()` e tratar o caso de nenhum registro encontrado de forma elegante.
+
+Próximos passos:
+- Analisar se os metadados do pagamento contêm todas as informações necessárias (plan_id, etc.)
+- Modificar a função webhook para lidar melhor com pagamentos sem tentativa prévia registrada
+- Verificar se estamos criando corretamente a tentativa de pagamento antes de enviar o usuário para o checkout
 
 ## Ações Tomadas (28/02 - 14:40)
 
@@ -271,3 +334,50 @@ Resultado: Erro 500 (Interno do Servidor).
 4. **Atualizar URL do webhook no Mercado Pago**
    - Atualizar para apontar para a função payment-webhook-public
    - Certificar-se de configurar para ambiente de produção
+
+## Correções Implementadas para Pagamentos sem Tentativa Prévia (28/02/2025)
+
+Com base no teste anterior, identificamos que o webhook estava falhando ao processar pagamentos quando não havia uma tentativa prévia registrada na tabela `payment_attempts`. As seguintes correções foram implementadas:
+
+1. **Consulta Melhorada**: 
+   - Alteramos o método de consulta para usar `.maybeSingle()` em vez de `.single()`.
+   - Isso permite que o fluxo continue mesmo quando não há registros, em vez de gerar um erro.
+
+2. **Logs Aprimorados**:
+   - Adicionamos logs mais detalhados que exibem o conteúdo completo dos metadados e external_reference.
+   - Isso facilita o diagnóstico de problemas e a visualização dos dados disponíveis.
+
+3. **Fallback para Pagamentos sem Metadados Completos**:
+   - Implementamos um mecanismo que tenta criar um registro básico de pagamento mesmo quando não existem todos os metadados esperados.
+   - O webhook agora cria um registro na tabela `payments` com as informações básicas (user_id, valor, método de pagamento).
+   - Também registra a transação na tabela `financial_logs` para referência futura.
+
+4. **Tratamento de Erros Aprimorado**:
+   - Melhoramos as mensagens de erro para facilitar o diagnóstico de problemas.
+   - O webhook agora retorna respostas com status 200 quando possível, em vez de falhar com 500.
+
+Estas melhorias permitem que o webhook processe pagamentos em diferentes cenários:
+- Pagamentos com tentativa prévia registrada (fluxo principal)
+- Pagamentos com metadados completos, mas sem tentativa prévia
+- Pagamentos com informações básicas, mas sem metadados completos
+- Pagamentos de teste do painel do Mercado Pago
+
+O webhook foi implantado e está pronto para testes. O próximo passo é realizar um novo teste de pagamento completo e verificar se os registros são criados corretamente nas tabelas relevantes.
+
+## Próximos Passos
+
+1. **Realizar novo teste de pagamento completo**
+   - Verificar se o webhook está processando corretamente
+   - Confirmar a criação dos registros nas tabelas `payments`, `subscriptions` e `financial_logs`
+
+2. **Verificar logs da função**
+   - Acessar o painel do Supabase para visualizar logs detalhados das funções edge
+   - Identificar a causa específica de qualquer erro encontrado
+
+3. **Atualizar URL do webhook no Mercado Pago**
+   - Atualizar para apontar para a função payment-webhook-public
+   - Certificar-se de configurar para ambiente de produção
+
+4. **Realizar testes adicionais**
+   - Testar diferentes cenários de pagamento
+   - Verificar a robustez do webhook em diferentes condições

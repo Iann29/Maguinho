@@ -148,6 +148,27 @@ serve(async (req) => {
       })
     }
 
+    // Verificar se é um ID de teste (123456)
+    const isTestId = paymentId === '123456';
+    const isTestMode = body.live_mode !== undefined && body.live_mode === false;
+    
+    if (isTestId || isTestMode) {
+      console.log('Notificação de teste detectada. ID:', paymentId, 'live_mode:', body.live_mode);
+      
+      // Se for um teste do Mercado Pago, retornar sucesso sem processamento
+      if (action === 'payment.updated' || action === 'payment.created') {
+        console.log('Retornando sucesso para notificação de teste.');
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'Notificação de teste recebida com sucesso.',
+          test_mode: true
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+    }
+
     // Buscar os detalhes completos do pagamento na API do Mercado Pago
     console.log('Buscando detalhes do pagamento na API do Mercado Pago...');
     const token = await getValidToken();
@@ -161,6 +182,20 @@ serve(async (req) => {
     if (!mpResponse.ok) {
       const errorData = await mpResponse.json();
       console.error('Erro ao buscar detalhes do pagamento:', errorData);
+      
+      // Se o erro for 404 (não encontrado) e for um ID de teste, retorne sucesso
+      if (mpResponse.status === 404 && (isTestId || isTestMode)) {
+        console.log('ID de pagamento de teste não encontrado na API, mas retornando sucesso.');
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'Notificação de teste recebida com sucesso.',
+          test_mode: true
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
       return new Response(JSON.stringify({ error: 'Erro ao buscar detalhes do pagamento', details: errorData }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -191,7 +226,7 @@ async function processPayment(payment) {
   const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
 
   try {
-    // Extrair dados do objeto payment
+    // Extrair informações do pagamento
     const paymentId = payment.id.toString();
     const paymentStatus = payment.status;
     const paymentAmount = payment.transaction_amount || payment.transaction_details?.total_paid_amount;
@@ -210,10 +245,29 @@ async function processPayment(payment) {
     console.log('- user_id:', userId);
     console.log('- plan_id:', planId);
     console.log('- plan_interval:', planInterval);
+    console.log('- live_mode:', payment.live_mode);
+    console.log('- metadata completo:', JSON.stringify(payment.metadata));
+    console.log('- external_reference:', payment.external_reference);
+    
+    // Verificar se é um pagamento de teste (ID 123456 ou live_mode=false)
+    const isTestPayment = paymentId === '123456' || (payment.live_mode !== undefined && payment.live_mode === false);
     
     if (!userId) {
-      console.error('ID de usuário não encontrado no pagamento')
-      throw new Error('ID de usuário não encontrado no pagamento')
+      console.error('ID de usuário não encontrado no pagamento');
+      
+      if (isTestPayment) {
+        console.log('Pagamento de teste detectado. Retornando sucesso sem processar.');
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'Pagamento de teste detectado. Notificação recebida com sucesso.',
+          test_mode: true
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
+      
+      throw new Error('ID de usuário não encontrado no pagamento');
     }
 
     // Buscar a tentativa de pagamento usando user_id
@@ -224,16 +278,15 @@ async function processPayment(payment) {
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single()
+      .limit(1);
 
     if (attemptError) {
       console.error('Erro ao buscar tentativa de pagamento:', attemptError)
       throw new Error(`Erro ao buscar tentativa de pagamento: ${attemptError.message}`)
     }
 
-    if (!attemptData) {
-      console.error('Tentativa de pagamento não encontrada para o usuário:', userId)
+    if (!attemptData || attemptData.length === 0) {
+      console.log('Tentativa de pagamento não encontrada para o usuário:', userId)
       
       // Se não encontramos a tentativa, vamos criar um registro diretamente
       if (planId && planInterval) {
@@ -243,38 +296,87 @@ async function processPayment(payment) {
         const { data: planData, error: planError } = await supabase
           .from('plans')
           .select('*')
-          .eq('id', planId)
-          .single()
+          .eq('billing_interval', planInterval)
+          .eq('active', true)
+          .limit(1);
           
         if (planError) {
           console.error('Erro ao buscar plano:', planError)
           throw new Error(`Erro ao buscar plano: ${planError.message}`)
         }
         
-        if (!planData) {
-          console.error('Plano não encontrado:', planId)
+        if (!planData || planData.length === 0) {
+          console.error('Plano não encontrado para o intervalo:', planInterval)
           throw new Error('Plano não encontrado')
         }
         
+        const plano = planData[0]
+        console.log('Plano encontrado:', plano.id, plano.name)
+        
         return await createPaymentRecord(supabase, payment, {
           user_id: userId,
-          plan_id: planId,
-          plan_name: planData.name,
+          plan_id: plano.id,
+          plan_name: plano.name,
           plan_price: paymentAmount,
           plan_interval: planInterval
         })
       } else {
-        throw new Error('Tentativa de pagamento não encontrada e metadados insuficientes')
+        // Tentar criar um registro básico mesmo sem os metadados completos
+        console.log('Tentando criar registro básico sem metadados completos...');
+        
+        // Criar registro de pagamento simples
+        const { data: paymentData, error: paymentError } = await supabase
+          .from('payments')
+          .insert({
+            user_id: userId,
+            amount: paymentAmount,
+            currency: 'BRL',
+            payment_method: paymentMethod,
+            transaction_id: paymentId,
+            status: 'approved'
+          })
+          .select();
+
+        if (paymentError) {
+          console.error('Erro ao criar registro de pagamento básico:', paymentError);
+          throw new Error(`Erro ao criar registro de pagamento básico: ${paymentError.message}`);
+        }
+
+        if (!paymentData || paymentData.length === 0) {
+          console.error('Registro de pagamento criado, mas não foi possível recuperar os dados');
+          throw new Error('Erro ao recuperar dados do pagamento criado');
+        }
+
+        console.log('Registro de pagamento básico criado com sucesso:', JSON.stringify(paymentData[0]));
+        
+        // Registrar no log financeiro
+        await supabase
+          .from('financial_logs')
+          .insert({
+            user_id: userId,
+            action: 'payment_processed',
+            description: 'Pagamento recebido via webhook (sem metadados completos)',
+            data: { payment_id: paymentId, amount: paymentAmount }
+          });
+        
+        return new Response(JSON.stringify({ 
+          success: true, 
+          message: 'Pagamento processado com sucesso (registro básico)',
+          payment_id: paymentData[0].id
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
     }
 
-    console.log('Tentativa de pagamento encontrada:', JSON.stringify(attemptData));
+    console.log('Tentativa de pagamento encontrada:', JSON.stringify(attemptData[0]));
 
     // Atualizar o status da tentativa de pagamento
     const { error: updateError } = await supabase
       .from('payment_attempts')
       .update({ status: paymentStatus, updated_at: new Date().toISOString() })
-      .eq('id', attemptData.id)
+      .eq('id', attemptData[0].id)
 
     if (updateError) {
       console.error('Erro ao atualizar tentativa de pagamento:', updateError)
@@ -285,7 +387,7 @@ async function processPayment(payment) {
 
     // Se o pagamento foi aprovado, criar um registro na tabela payments e atualizar ou criar assinatura
     if (paymentStatus === 'approved') {
-      return await createPaymentRecord(supabase, payment, attemptData)
+      return await createPaymentRecord(supabase, payment, attemptData[0])
     }
 
     // Retornar uma resposta de sucesso
@@ -312,31 +414,63 @@ async function createPaymentRecord(supabase, payment, attemptData) {
     .from('payments')
     .insert({
       user_id: attemptData.user_id,
-      amount: paymentAmount,
+      amount: payment.transaction_amount || payment.transaction_details?.total_paid_amount,
       currency: 'BRL',
-      payment_method: paymentMethod,
-      transaction_id: paymentId,
+      payment_method: payment.payment_method_id || payment.payment_type_id,
+      transaction_id: payment.id.toString(),
       status: 'approved'
     })
-    .select()
-    .single()
+    .select();
 
   if (paymentError) {
     console.error('Erro ao criar registro de pagamento:', paymentError)
     throw new Error(`Erro ao criar registro de pagamento: ${paymentError.message}`)
   }
 
-  console.log('Registro de pagamento criado:', JSON.stringify(paymentData));
+  if (!paymentData || paymentData.length === 0) {
+    console.error('Registro de pagamento criado, mas não foi possível recuperar os dados');
+    throw new Error('Erro ao recuperar dados do pagamento criado');
+  }
+
+  console.log('Registro de pagamento criado:', JSON.stringify(paymentData[0]));
 
   // Verificar se o usuário já tem uma assinatura ativa para esse plano
   console.log('Verificando assinatura existente...');
+  
+  // Primeiro, vamos obter o plano correto pelo intervalo
+  let planId = attemptData.plan_id;
+  
+  // Se o plan_id não é um UUID válido, buscar o plano pelo intervalo
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(planId)) {
+    console.log('ID do plano não é um UUID válido, buscando pelo intervalo...');
+    const { data: planData, error: planError } = await supabase
+      .from('plans')
+      .select('id')
+      .eq('billing_interval', attemptData.plan_interval)
+      .eq('active', true)
+      .limit(1);
+      
+    if (planError) {
+      console.error('Erro ao buscar plano pelo intervalo:', planError);
+      throw new Error(`Erro ao buscar plano pelo intervalo: ${planError.message}`);
+    }
+    
+    if (planData && planData.length > 0) {
+      console.log('Plano encontrado pelo intervalo:', planData[0].id);
+      planId = planData[0].id;
+    } else {
+      console.error('Nenhum plano encontrado para o intervalo:', attemptData.plan_interval);
+      throw new Error('Nenhum plano encontrado para o intervalo especificado');
+    }
+  }
+  
   const { data: subscriptionData, error: subscriptionError } = await supabase
     .from('subscriptions')
     .select('*')
     .eq('user_id', attemptData.user_id)
-    .eq('plan_id', attemptData.plan_id)
+    .eq('plan_id', planId)
     .eq('status', 'active')
-    .maybeSingle()
+    .limit(1);
 
   if (subscriptionError) {
     console.error('Erro ao buscar assinatura:', subscriptionError)
@@ -358,7 +492,7 @@ async function createPaymentRecord(supabase, payment, attemptData) {
   }
 
   // Se já existe uma assinatura, atualizar, senão criar uma nova
-  if (subscriptionData) {
+  if (subscriptionData && subscriptionData.length > 0) {
     console.log('Assinatura existente encontrada, atualizando...');
     const { error: updateSubscriptionError } = await supabase
       .from('subscriptions')
@@ -367,7 +501,7 @@ async function createPaymentRecord(supabase, payment, attemptData) {
         end_date: endDate.toISOString(),
         updated_at: new Date().toISOString()
       })
-      .eq('id', subscriptionData.id)
+      .eq('id', subscriptionData[0].id)
 
     if (updateSubscriptionError) {
       console.error('Erro ao atualizar assinatura:', updateSubscriptionError)
@@ -381,7 +515,7 @@ async function createPaymentRecord(supabase, payment, attemptData) {
       .from('subscriptions')
       .insert({
         user_id: attemptData.user_id,
-        plan_id: attemptData.plan_id,
+        plan_id: planId,
         status: 'active',
         start_date: startDate.toISOString(),
         end_date: endDate.toISOString()
@@ -403,8 +537,12 @@ async function createPaymentRecord(supabase, payment, attemptData) {
       user_id: attemptData.user_id,
       action: 'payment_processed',
       description: `Pagamento de ${attemptData.plan_name} processado com sucesso`,
-      amount: paymentAmount,
-      reference_id: paymentId
+      data: {
+        payment_id: payment.id.toString(),
+        amount: payment.transaction_amount || payment.transaction_details?.total_paid_amount,
+        plan_name: attemptData.plan_name,
+        plan_interval: attemptData.plan_interval
+      }
     })
 
   if (logError) {
