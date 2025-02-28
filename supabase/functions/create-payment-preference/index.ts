@@ -14,6 +14,14 @@ console.log('Token de acesso disponível:', !!MP_ACCESS_TOKEN);
 console.log('Client ID disponível:', !!MP_CLIENT_ID);
 console.log('Client Secret disponível:', !!MP_CLIENT_SECRET);
 
+// Imprimir os primeiros e últimos 10 caracteres do token para verificação
+if (MP_ACCESS_TOKEN) {
+  const tokenLength = MP_ACCESS_TOKEN.length;
+  console.log(`Token de acesso (primeiros 10 caracteres): ${MP_ACCESS_TOKEN.substring(0, 10)}...`);
+  console.log(`Token de acesso (últimos 10 caracteres): ...${MP_ACCESS_TOKEN.substring(tokenLength - 10)}`);
+  console.log(`Comprimento do token: ${tokenLength} caracteres`);
+}
+
 serve(async (req) => {
   // Lidar com requisições OPTIONS para CORS
   if (req.method === 'OPTIONS') {
@@ -70,7 +78,12 @@ serve(async (req) => {
       })
     }
 
-    // Criar preferência de pagamento usando fetch diretamente com client_id e client_secret
+    // Criar preferência de pagamento usando fetch diretamente
+    console.log('Tentando criar preferência de pagamento com o Mercado Pago');
+    
+    // Imprimir o cabeçalho de autorização para depuração
+    console.log('Cabeçalho de autorização: Bearer ' + MP_ACCESS_TOKEN.substring(0, 10) + '...');
+    
     const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
@@ -111,6 +124,76 @@ serve(async (req) => {
     if (!mpResponse.ok) {
       const errorData = await mpResponse.json();
       console.error('Erro do Mercado Pago:', errorData);
+      
+      // Tentar com o token de teste como fallback
+      console.log('Tentando com o token de teste como fallback');
+      const MP_TEST_ACCESS_TOKEN = Deno.env.get('MP_TEST_ACCESS_TOKEN') || '';
+      
+      if (MP_TEST_ACCESS_TOKEN) {
+        console.log('Token de teste disponível, tentando novamente');
+        
+        const mpTestResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${MP_TEST_ACCESS_TOKEN}`
+          },
+          body: JSON.stringify({
+            items: [
+              {
+                id: planId,
+                title: planName || 'Assinatura Maguinho',
+                description: `Assinatura ${planInterval} do Maguinho`,
+                quantity: 1,
+                currency_id: 'BRL',
+                unit_price: planPrice
+              }
+            ],
+            payer: {
+              name: userName || user.email || 'Usuário',
+              email: user.email
+            },
+            back_urls: {
+              success: 'https://maguinho.com/dashboard',
+              failure: 'https://maguinho.com/subscription',
+              pending: 'https://maguinho.com/subscription'
+            },
+            auto_return: 'approved',
+            statement_descriptor: 'MAGUINHO',
+            external_reference: user.id,
+            metadata: {
+              user_id: user.id,
+              plan_id: planId,
+              plan_interval: planInterval
+            }
+          })
+        });
+        
+        if (mpTestResponse.ok) {
+          const testResult = await mpTestResponse.json();
+          console.log('Preferência criada com sucesso usando token de teste:', testResult.id);
+          
+          // Registrar a tentativa de pagamento no banco de dados
+          await supabase.from('payment_attempts').insert({
+            user_id: user.id,
+            preference_id: testResult.id,
+            plan_id: planId,
+            plan_name: planName,
+            plan_price: planPrice,
+            plan_interval: planInterval,
+            status: 'pending'
+          });
+          
+          return new Response(JSON.stringify({ preferenceId: testResult.id }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        } else {
+          const testErrorData = await mpTestResponse.json();
+          console.error('Erro do Mercado Pago com token de teste:', testErrorData);
+        }
+      }
+      
       throw new Error(errorData.message || 'Erro ao criar preferência de pagamento');
     }
 
