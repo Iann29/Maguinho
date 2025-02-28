@@ -1,0 +1,113 @@
+# Relatório de Testes - Integração de Pagamentos Maguinho
+
+## Data do teste: 28/02/2025
+## Testador: Iann
+
+## Fluxo de Teste Realizado
+
+1. **Login na plataforma**
+   - Conta utilizada: iansingshau@gmail.com
+   - Mensagem registrada: "Usuário não possui assinatura ativa"
+
+2. **Navegação para assinatura**
+   - Acesso à dashboard
+   - Clique em "Ver planos"
+   - Seleção de "Plano Básico Mensal"
+   - Prosseguimento para pagamento
+
+3. **Processo de checkout**
+   - Botão "Pagar assinatura" do Mercado Pago criado corretamente
+   - Comportamento: Redirecionamento para checkout externo do Mercado Pago (não manteve no site)
+   - Informações no checkout:
+     - Nome exibido: "MAGUINHO TEST"
+     - Produto: "Plano Básico"
+     - Valor: R$ 19,99
+
+4. **Autenticação no Mercado Pago**
+   - Conta de teste utilizada:
+     - Usuário: TESTUSER1372776159
+     - Senha: ptATFtPkK7
+
+5. **Conclusão do pagamento**
+   - Método: Saldo em conta (teste)
+   - Resultado: Pagamento confirmado
+   - Comportamento pós-pagamento: Redirecionamento para dashboard
+
+## Logs e Registros
+
+### Edge Function: create-payment-preference
+```
+"Preferência criada com sucesso: 2293113905-5d8e14a2-75f1-44e9-aab3-b55492781579"
+"Cabeçalho de autorização: Bearer APP_USR-44..."
+"Tentando criar preferência de pagamento com o Mercado Pago"
+"Token de acesso obtido com sucesso"
+"Tentando obter token de acesso com Client ID e Secret"
+"Gerando novo token com Client ID e Client Secret"
+"Client Secret disponível: true"
+"Client ID disponível: true"
+```
+
+### Edge Function: payment-webhook
+- **Resultado**: Nenhum log registrado!
+
+### Mercado Pago
+- Atividade registrada: "Venda de produtos" +R$ 19,99 às 10:17
+- Referência da transação: 103704222347
+- Cliente: Test Test (test_user_1372776159@testuser.com)
+- Referência externa: 518d7220-f0e0-41ea-a699-e73fa1d605df
+
+### Banco de Dados - Verificação de Tabelas
+
+#### financial_logs
+- Nenhum registro criado
+
+#### payment_attempts
+- 4 registros existentes, o mais recente:
+```
+"5859d367-6ce9-4acf-a974-c11413c7a0a5",
+"518d7220-f0e0-41ea-a699-e73fa1d605df",
+"2293113905-5d8e14a2-75f1-44e9-aab3-b55492781579",
+"plano_basico_mensal",
+"Plano Básico",
+"19.99",
+"mensal",
+"pending",
+"2025-02-28 10:12:53.944095",
+"2025-02-28 10:12:53.944095"
+```
+
+#### payments
+- Nenhum registro criado (deveria ter sido criado)
+
+#### subscriptions
+- Nenhum registro criado (deveria ter sido criado)
+
+#### transactions
+- Nenhum registro criado (deveria ter sido criado)
+
+#### webhook_logs
+- Nenhum registro criado
+
+### Configuração de Webhook no Mercado Pago
+- Status: 0% notificações entregues
+- Problema identificado: URL configurada era de teste, não de produção
+
+## Problemas Identificados
+
+1. **Webhook não está funcionando**
+   - Causa provável: URL incorreta configurada no Mercado Pago
+   - Impacto: Não está criando registros em payments, subscriptions e transactions
+
+2. **Experiência de usuário no checkout**
+   - Problema: Redirecionamento para site externo do Mercado Pago
+   - Desejado: Manter o processo dentro da plataforma Maguinho
+
+3. **Interface de pagamento**
+   - Status: Necessita melhorias estéticas e de usabilidade
+
+## Próximos Passos
+
+1. Corrigir a URL do webhook no painel do Mercado Pago para a URL de produção
+2. Verificar e melhorar o tratamento de notificações na edge function payment-webhook
+3. Revisar e aprimorar a interface de pagamento no frontend
+4. Implementar testes adicionais após as correções

@@ -85,7 +85,12 @@ serve(async (req) => {
       })
     }
 
+    // Log completo do cabeçalho da requisição para diagnóstico
+    console.log('Headers da requisição:', JSON.stringify(Object.fromEntries(req.headers.entries())));
+
     // Verificar a assinatura do webhook se o segredo estiver configurado
+    // Desabilitando temporariamente a verificação de assinatura para debug
+    /*
     if (MP_WEBHOOK_SECRET) {
       const signature = req.headers.get('x-signature')
       if (!signature) {
@@ -99,6 +104,7 @@ serve(async (req) => {
       // Implementar verificação de assinatura aqui
       // ...
     }
+    */
 
     // Obter dados do corpo da requisição
     const requestData = await req.json()
