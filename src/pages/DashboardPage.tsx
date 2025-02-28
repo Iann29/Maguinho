@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { LogOut, UserX, Lock } from "lucide-react";
+import { LogOut, UserX, Lock, CreditCard } from "lucide-react";
 import { supabase } from '../lib/supabaseClient';
 import { User } from '@supabase/supabase-js';
 
@@ -10,8 +10,19 @@ interface UserData extends User {
   phone?: string;
 }
 
+interface Subscription {
+  id: string;
+  plan_name: string;
+  plan_price: number;
+  plan_interval: string;
+  status: string;
+  start_date: string;
+  end_date: string;
+}
+
 export function DashboardPage() {
   const [user, setUser] = useState<UserData | null>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [loading, setLoading] = useState(true);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [password, setPassword] = useState('');
@@ -52,6 +63,20 @@ export function DashboardPage() {
           ...user,
           ...userData
         });
+        
+        // Buscar informações da assinatura
+        const { data: subscriptionData, error: subscriptionError } = await supabase
+          .from('subscriptions')
+          .select('*')
+          .eq('user_id', user.id)
+          .eq('status', 'active')
+          .single();
+          
+        if (subscriptionError) {
+          console.log('Usuário não possui assinatura ativa');
+        } else {
+          setSubscription(subscriptionData);
+        }
       } catch (error) {
         console.error('Erro ao verificar autenticação:', error);
         navigate('/login');
@@ -208,6 +233,55 @@ export function DashboardPage() {
         {/* Conteúdo da Dashboard */}
         <div className="bg-[#1C1E21]/60 backdrop-blur-sm rounded-lg border border-[#2A2D31]/50 p-6">
           <h2 className="text-xl font-semibold mb-4">Bem-vindo, {user?.name}</h2>
+          
+          {subscription ? (
+            // Mostrar informações da assinatura ativa
+            <div className="bg-gradient-to-r from-[#00E7C1]/20 to-transparent rounded-lg p-6 mb-6 border border-[#00E7C1]/30">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <CreditCard size={20} className="text-[#00E7C1]" />
+                    <h3 className="text-lg font-semibold">
+                      Assinatura {subscription.plan_name} Ativa
+                    </h3>
+                  </div>
+                  <p className="text-gray-400 mb-2">
+                    R$ {subscription.plan_price.toFixed(2)}/{subscription.plan_interval}
+                  </p>
+                  <p className="text-sm text-gray-400">
+                    Válida até: {new Date(subscription.end_date).toLocaleDateString('pt-BR')}
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className="bg-[#2A2D31] text-white px-6 py-2 rounded-lg font-medium hover:bg-[#2A2D31]/80 transition-colors whitespace-nowrap"
+                >
+                  Gerenciar Assinatura
+                </button>
+              </div>
+            </div>
+          ) : (
+            // Banner para usuários sem assinatura
+            <div className="bg-gradient-to-r from-[#2A2D31] to-[#1C1E21] rounded-lg p-6 mb-6 border border-[#2A2D31]/80">
+              <div className="flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                  <h3 className="text-lg font-semibold mb-2">
+                    Escolha seu plano Maguinho
+                  </h3>
+                  <p className="text-gray-400 mb-4 md:mb-0">
+                    Planos a partir de R$ 19,99/mês. Tenha acesso a recursos exclusivos!
+                  </p>
+                </div>
+                <button
+                  onClick={() => navigate('/subscription')}
+                  className="bg-[#00E7C1] text-black px-6 py-3 rounded-lg font-medium hover:bg-[#00E7C1]/90 transition-colors whitespace-nowrap"
+                >
+                  Ver Planos
+                </button>
+              </div>
+            </div>
+          )}
+          
           {/* Adicione aqui o conteúdo principal da dashboard */}
         </div>
 

@@ -32,6 +32,10 @@ dist-ssr
 
 # Project specific
 .bolt
+deploy-functions.ps1
+apply-migration.ps1
+run-migration.ps1
+run-payment-attempts-migration.ps1
 
 # windsurf rules
 .windsurfrules

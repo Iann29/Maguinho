@@ -1,0 +1,11 @@
+{
+  "name": "create-payment-preference",
+  "version": "1.0.0",
+  "description": "Cria uma preferência de pagamento no Mercado Pago",
+  "imports": {
+    "https://esm.sh/mercadopago@1.5.16": {
+      "name": "mercadopago",
+      "version": "1.5.16"
+    }
+  }
+}
