@@ -461,3 +461,40 @@ export async function createFinancialLog(userId: string, action: string, descrip
     // Não lançar erro para não interromper o fluxo principal
   }
 }
+
+/**
+ * Verifica se existe pagamento recente aprovado para o usuário
+ */
+export async function findRecentPayment(userId: string, hours: number = 24): Promise<any> {
+  logDebug(`Buscando pagamento recente para usuário ${userId} nas últimas ${hours} horas`);
+  
+  const cutoffTime = new Date();
+  cutoffTime.setHours(cutoffTime.getHours() - hours);
+  
+  try {
+    const { data, error } = await supabase
+      .from('payments')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('status', 'approved')
+      .gte('created_at', cutoffTime.toISOString())
+      .order('created_at', { ascending: false })
+      .limit(1);
+
+    if (error) {
+      logError('Erro ao buscar pagamento recente', error);
+      throw error;
+    }
+
+    if (!data || data.length === 0) {
+      logDebug('Nenhum pagamento recente encontrado');
+      return null;
+    }
+
+    logDebug('Pagamento recente encontrado', data[0]);
+    return data[0];
+  } catch (error) {
+    logError('Erro ao buscar pagamento recente', error);
+    throw error;
+  }
+}

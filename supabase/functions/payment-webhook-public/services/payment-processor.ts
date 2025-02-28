@@ -311,6 +311,27 @@ export async function processPayment(paymentId: string): Promise<Response> {
       throw new Error('ID de usuário não encontrado no pagamento');
     }
     
+    // Verificar se já existe um pagamento recente aprovado para este usuário
+    if (payment.status === 'approved') {
+      // Verificar se já existe um pagamento recente
+      const recentPayment = await db.findRecentPayment(userId, 24);
+      
+      if (recentPayment) {
+        logInfo(`Pagamento recente já encontrado (${recentPayment.id}) para o usuário ${userId}`);
+        
+        // Já existe um pagamento recente, apenas retornar sucesso sem criar um novo
+        return new Response(JSON.stringify({ 
+          success: true, 
+          status: payment.status,
+          message: 'Pagamento já processado anteriormente',
+          payment_id: recentPayment.id
+        }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+    }
+    
     // Buscar a tentativa de pagamento
     const attemptData = await db.findPaymentAttempt(userId, payment.external_reference);
     
