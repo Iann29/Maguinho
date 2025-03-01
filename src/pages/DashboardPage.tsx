@@ -243,6 +243,3 @@ export function DashboardPage() {
         isOpen={showPasswordModal} 
         onClose={() => setShowPasswordModal(false)} 
       />
-    </div>
-  );
-}

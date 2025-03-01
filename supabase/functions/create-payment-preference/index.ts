@@ -167,6 +167,14 @@ serve(async (req) => {
           user_id: user.id,
           plan_id: planId,
           plan_interval: planInterval
+        },
+        binary_mode: true, // Apenas aprovado ou rejeitado, sem pendente
+        expires: false, // Preferência não expira
+        processing_modes: ["aggregator"], // Modo de processamento agregador
+        payment_methods: {
+          excluded_payment_methods: [], // Não excluir nenhum método de pagamento
+          excluded_payment_types: [], // Não excluir nenhum tipo de pagamento
+          installments: 1 // Número de parcelas padrão
         }
       })
     });
@@ -217,6 +225,14 @@ serve(async (req) => {
               user_id: user.id,
               plan_id: planId,
               plan_interval: planInterval
+            },
+            binary_mode: true, // Apenas aprovado ou rejeitado, sem pendente
+            expires: false, // Preferência não expira
+            processing_modes: ["aggregator"], // Modo de processamento agregador
+            payment_methods: {
+              excluded_payment_methods: [], // Não excluir nenhum método de pagamento
+              excluded_payment_types: [], // Não excluir nenhum tipo de pagamento
+              installments: 1 // Número de parcelas padrão
             }
           })
         });

@@ -15,6 +15,13 @@ interface Plan {
   popular?: boolean;
 }
 
+// Declaração para o SDK do Mercado Pago
+declare global {
+  interface Window {
+    MercadoPago: any;
+  }
+}
+
 export function SubscriptionPage() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -177,6 +184,17 @@ export function SubscriptionPage() {
     };
 
     checkAuth();
+    
+    // Carregar o script do Mercado Pago
+    const script = document.createElement('script');
+    script.src = 'https://sdk.mercadopago.com/js/v2';
+    script.async = true;
+    document.body.appendChild(script);
+    
+    return () => {
+      // Limpar script ao desmontar o componente
+      document.body.removeChild(script);
+    };
   }, [navigate]);
 
   const createPaymentPreference = async () => {
@@ -227,20 +245,27 @@ export function SubscriptionPage() {
           },
           render: {
             container: '.checkout-button',
-            label: 'Pagar Assinatura'
+            label: 'Continuar para pagamento'
+          },
+          theme: {
+            elementsColor: '#00E7C1',
+            headerColor: '#00E7C1'
           }
         });
+        
+        // Mostrar mensagem de orientação ao usuário
+        setProcessingPayment(false);
       }
     } catch (error) {
       console.error('Erro ao processar pagamento:', error);
       setError('Não foi possível processar seu pagamento. Por favor, tente novamente.');
-    } finally {
       setProcessingPayment(false);
     }
   };
 
   const handleSelectPlan = (plan: Plan) => {
     setSelectedPlan(plan);
+    setPreferenceId(null); // Resetar preferenceId ao trocar de plano
   };
 
   if (loading) {
@@ -363,23 +388,31 @@ export function SubscriptionPage() {
             )}
             
             <div className="space-y-4">
-              <button
-                onClick={createPaymentPreference}
-                disabled={processingPayment || !!preferenceId}
-                className="w-full bg-[#00E7C1] text-black px-4 py-3 rounded-lg font-medium hover:bg-[#00E7C1]/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-              >
-                {processingPayment ? (
-                  'Processando...'
-                ) : (
-                  <>
-                    <CreditCard size={20} />
-                    <span>Prosseguir para Pagamento</span>
-                  </>
-                )}
-              </button>
-              
-              {/* Container para o botão de checkout do Mercado Pago */}
-              <div className="checkout-button"></div>
+              {!preferenceId ? (
+                <button
+                  onClick={createPaymentPreference}
+                  disabled={processingPayment}
+                  className="w-full bg-[#00E7C1] text-black px-4 py-3 rounded-lg font-medium hover:bg-[#00E7C1]/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {processingPayment ? (
+                    'Processando...'
+                  ) : (
+                    <>
+                      <CreditCard size={20} />
+                      <span>Pagar Agora</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-blue-500/10 border border-blue-500/30 text-blue-400 p-4 rounded-lg text-sm">
+                    <p className="mb-2 font-medium">Você será redirecionado para a página de pagamento seguro do Mercado Pago.</p>
+                    <p>Após concluir o pagamento, você será automaticamente redirecionado de volta para o Maguinho.</p>
+                  </div>
+                  
+                  <div className="checkout-button"></div>
+                </div>
+              )}
               
               <p className="text-xs text-gray-400 text-center">
                 Pagamento processado com segurança pelo Mercado Pago.
