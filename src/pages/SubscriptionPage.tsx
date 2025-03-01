@@ -15,7 +15,7 @@ interface Plan {
   popular?: boolean;
 }
 
-// Declaração para o SDK do Mercado Pago
+// Declaração para o SDK do Mercado Pagoo
 declare global {
   interface Window {
     MercadoPago: any;

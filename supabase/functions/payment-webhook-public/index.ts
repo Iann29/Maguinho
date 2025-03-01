@@ -6,5 +6,5 @@ import { logInitInfo } from './utils/logger.ts';
 // Log de inicialização
 logInitInfo();
 
-// Iniciar o servidor
+// Iniciar o servidor hehe
 serve(handleWebhook);

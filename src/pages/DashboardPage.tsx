@@ -238,7 +238,7 @@ export function DashboardPage() {
         </div>
       </div>
 
-      {/* Modal de Atualização de Senha */}
+      {/* Modal de Atualização de Skenha */}
       <PasswordModal 
         isOpen={showPasswordModal} 
         onClose={() => setShowPasswordModal(false)} 
