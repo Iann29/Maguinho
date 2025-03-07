@@ -12,6 +12,73 @@ const MP_CLIENT_SECRET = Deno.env.get('MP_PROD_CLIENT_SECRET') || ''
 console.log('Client ID disponível:', !!MP_CLIENT_ID);
 console.log('Client Secret disponível:', !!MP_CLIENT_SECRET);
 
+// Interface para o tipo de cupom
+interface Coupon {
+  id: string;
+  code: string;
+  discount_type: 'percent' | 'fixed';
+  discount_value: number;
+  usage_limit: number;
+  usage_count: number;
+  expires_at: string | null;
+}
+
+// Função para validar o cupom
+async function validateCoupon(supabase, code: string, userId: string): Promise<{valid: boolean, coupon?: Coupon, message?: string}> {
+  if (!code || code.trim() === '') {
+    return { valid: false, message: 'Código de cupom vazio' };
+  }
+
+  // Verificar se o cupom existe
+  const { data: coupon, error } = await supabase
+    .from('coupons')
+    .select('*')
+    .eq('code', code.toUpperCase())
+    .single();
+  
+  if (error || !coupon) {
+    return { valid: false, message: 'Cupom inválido ou não encontrado' };
+  }
+
+  // Verificar se o cupom expirou
+  if (coupon.expires_at && new Date(coupon.expires_at) < new Date()) {
+    return { valid: false, message: 'Este cupom já expirou' };
+  }
+
+  // Verificar se o cupom atingiu o limite de uso
+  if (coupon.usage_limit > 0 && coupon.usage_count >= coupon.usage_limit) {
+    return { valid: false, message: 'Este cupom atingiu o limite de uso' };
+  }
+
+  // Verificar se o usuário já usou este cupom
+  const { data: usages, error: usageError } = await supabase
+    .from('coupon_usages')
+    .select('*')
+    .eq('coupon_id', coupon.id)
+    .eq('user_id', userId);
+
+  if (usageError) {
+    console.error('Erro ao verificar uso do cupom:', usageError);
+    return { valid: false, message: 'Erro ao verificar uso do cupom' };
+  }
+
+  if (usages && usages.length > 0) {
+    return { valid: false, message: 'Você já usou este cupom anteriormente' };
+  }
+
+  return { valid: true, coupon };
+}
+
+// Função para aplicar desconto baseado no cupom
+function applyDiscount(originalPrice: number, coupon: Coupon): number {
+  if (coupon.discount_type === 'percent') {
+    const discount = (originalPrice * coupon.discount_value) / 100;
+    return Math.max(0, originalPrice - discount);
+  } else { // fixed
+    return Math.max(0, originalPrice - coupon.discount_value);
+  }
+}
+
 // Função para obter um token de acesso usando client_id e client_secret
 async function getAccessToken() {
   try {
@@ -114,7 +181,7 @@ serve(async (req) => {
     }
 
     // Obter dados do corpo da requisição
-    const { planId, planName, planPrice, planInterval, userName } = await req.json()
+    const { planId, planName, planPrice, planInterval, userName, couponCode } = await req.json()
 
     // Validar os dados do plano
     if (!planId || !planPrice || !planInterval) {
@@ -124,15 +191,66 @@ serve(async (req) => {
       })
     }
 
+    // Variáveis para controle de cupom e preço
+    let finalPrice = planPrice;
+    let discountAmount = 0;
+    let appliedCoupon = null;
+    let couponError = null;
+
+    // Verificar e aplicar cupom, se fornecido
+    if (couponCode) {
+      console.log(`Validando cupom: ${couponCode} para usuário: ${user.id}`);
+      const couponValidation = await validateCoupon(supabase, couponCode, user.id);
+      
+      if (couponValidation.valid && couponValidation.coupon) {
+        appliedCoupon = couponValidation.coupon;
+        const originalPrice = planPrice;
+        finalPrice = applyDiscount(originalPrice, appliedCoupon);
+        discountAmount = originalPrice - finalPrice;
+        
+        console.log(`Cupom válido: ${appliedCoupon.code}, tipo: ${appliedCoupon.discount_type}, valor: ${appliedCoupon.discount_value}`);
+        console.log(`Preço original: ${originalPrice}, preço com desconto: ${finalPrice}, desconto: ${discountAmount}`);
+        
+        // Incrementar o contador de uso do cupom
+        const { error: updateError } = await supabase
+          .from('coupons')
+          .update({ usage_count: appliedCoupon.usage_count + 1 })
+          .eq('id', appliedCoupon.id);
+          
+        if (updateError) {
+          console.error('Erro ao atualizar contador de uso do cupom:', updateError);
+        } else {
+          console.log(`Contador de uso do cupom ${appliedCoupon.code} incrementado para ${appliedCoupon.usage_count + 1}`);
+        }
+      } else {
+        couponError = couponValidation.message;
+        console.log(`Cupom inválido: ${couponError}`);
+      }
+    }
+
     // Obter um token válido para o Mercado Pago
     const accessToken = await getValidToken();
 
     // Criar preferência de pagamento usando fetch diretamente
     console.log('Tentando criar preferência de pagamento com o Mercado Pago');
-    
-    // Imprimir o cabeçalho de autorização para depuração
     console.log('Cabeçalho de autorização: Bearer ' + accessToken.substring(0, 10) + '...');
     
+    // Montar o payload com os metadados, incluindo informações do cupom se aplicável
+    const payloadMetadata = {
+      user_id: user.id,
+      plan_id: planId,
+      plan_interval: planInterval
+    };
+
+    if (appliedCoupon) {
+      Object.assign(payloadMetadata, {
+        coupon_id: appliedCoupon.id,
+        coupon_code: appliedCoupon.code,
+        original_price: planPrice,
+        discount_amount: discountAmount
+      });
+    }
+
     const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
       method: 'POST',
       headers: {
@@ -144,10 +262,10 @@ serve(async (req) => {
           {
             id: planId,
             title: planName || 'Assinatura Maguinho',
-            description: `Assinatura ${planInterval} do Maguinho`,
+            description: `Assinatura ${planInterval} do Maguinho${appliedCoupon ? ` com cupom ${appliedCoupon.code}` : ''}`,
             quantity: 1,
             currency_id: 'BRL',
-            unit_price: planPrice
+            unit_price: finalPrice
           }
         ],
         payer: {
@@ -163,11 +281,7 @@ serve(async (req) => {
         notification_url: 'https://zssitwbdprfnqglttwhs.supabase.co/functions/v1/payment-webhook-public',
         statement_descriptor: 'MAGUINHO',
         external_reference: user.id,
-        metadata: {
-          user_id: user.id,
-          plan_id: planId,
-          plan_interval: planInterval
-        },
+        metadata: payloadMetadata,
         binary_mode: true, // Apenas aprovado ou rejeitado, sem pendente
         expires: false, // Preferência não expira
         processing_modes: ["aggregator"], // Modo de processamento agregador
@@ -191,6 +305,7 @@ serve(async (req) => {
         const newToken = await getAccessToken();
         
         console.log('Tentando novamente com o novo token');
+        // Repetindo o mesmo payload da requisição anterior
         const retryResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
           method: 'POST',
           headers: {
@@ -202,10 +317,10 @@ serve(async (req) => {
               {
                 id: planId,
                 title: planName || 'Assinatura Maguinho',
-                description: `Assinatura ${planInterval} do Maguinho`,
+                description: `Assinatura ${planInterval} do Maguinho${appliedCoupon ? ` com cupom ${appliedCoupon.code}` : ''}`,
                 quantity: 1,
                 currency_id: 'BRL',
-                unit_price: planPrice
+                unit_price: finalPrice
               }
             ],
             payer: {
@@ -221,18 +336,14 @@ serve(async (req) => {
             notification_url: 'https://zssitwbdprfnqglttwhs.supabase.co/functions/v1/payment-webhook-public',
             statement_descriptor: 'MAGUINHO',
             external_reference: user.id,
-            metadata: {
-              user_id: user.id,
-              plan_id: planId,
-              plan_interval: planInterval
-            },
-            binary_mode: true, // Apenas aprovado ou rejeitado, sem pendente
-            expires: false, // Preferência não expira
-            processing_modes: ["aggregator"], // Modo de processamento agregador
+            metadata: payloadMetadata,
+            binary_mode: true,
+            expires: false,
+            processing_modes: ["aggregator"],
             payment_methods: {
-              excluded_payment_methods: [], // Não excluir nenhum método de pagamento
-              excluded_payment_types: [], // Não excluir nenhum tipo de pagamento
-              installments: 1 // Número de parcelas padrão
+              excluded_payment_methods: [],
+              excluded_payment_types: [],
+              installments: 1
             }
           })
         });
@@ -242,17 +353,37 @@ serve(async (req) => {
           console.log('Preferência criada com sucesso após retry:', retryResult.id);
           
           // Registrar a tentativa de pagamento no banco de dados
-          await supabase.from('payment_attempts').insert({
+          const paymentAttemptData = {
             user_id: user.id,
             preference_id: retryResult.id,
             plan_id: planId,
             plan_name: planName,
-            plan_price: planPrice,
+            plan_price: finalPrice, // Preço com desconto
             plan_interval: planInterval,
             status: 'pending'
-          });
+          };
+
+          // Adicionar informações do cupom se aplicado
+          if (appliedCoupon) {
+            Object.assign(paymentAttemptData, {
+              coupon_id: appliedCoupon.id,
+              coupon_code: appliedCoupon.code,
+              original_price: planPrice,
+              discount_amount: discountAmount
+            });
+          }
+
+          await supabase.from('payment_attempts').insert(paymentAttemptData);
           
-          return new Response(JSON.stringify({ preferenceId: retryResult.id }), {
+          return new Response(JSON.stringify({ 
+            preferenceId: retryResult.id,
+            couponApplied: appliedCoupon ? true : false,
+            originalPrice: appliedCoupon ? planPrice : finalPrice,
+            finalPrice: finalPrice,
+            discountAmount: discountAmount,
+            couponCode: appliedCoupon ? appliedCoupon.code : null,
+            couponError: couponError
+          }), {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           });
@@ -269,20 +400,40 @@ serve(async (req) => {
     console.log('Preferência criada com sucesso:', result.id);
 
     // Registrar a tentativa de pagamento no banco de dados
-    await supabase.from('payment_attempts').insert({
+    const paymentAttemptData = {
       user_id: user.id,
       preference_id: result.id,
       plan_id: planId,
       plan_name: planName,
-      plan_price: planPrice,
+      plan_price: finalPrice, // Preço com desconto
       plan_interval: planInterval,
       status: 'pending'
-    })
+    };
 
-    return new Response(JSON.stringify({ preferenceId: result.id }), {
+    // Adicionar informações do cupom se aplicado
+    if (appliedCoupon) {
+      Object.assign(paymentAttemptData, {
+        coupon_id: appliedCoupon.id,
+        coupon_code: appliedCoupon.code,
+        original_price: planPrice,
+        discount_amount: discountAmount
+      });
+    }
+
+    await supabase.from('payment_attempts').insert(paymentAttemptData);
+
+    return new Response(JSON.stringify({
+      preferenceId: result.id,
+      couponApplied: appliedCoupon ? true : false,
+      originalPrice: appliedCoupon ? planPrice : finalPrice,
+      finalPrice: finalPrice,
+      discountAmount: discountAmount,
+      couponCode: appliedCoupon ? appliedCoupon.code : null,
+      couponError: couponError
+    }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    })
+    });
   } catch (error) {
     console.error('Erro ao processar pagamento:', error)
     

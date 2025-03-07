@@ -498,3 +498,101 @@ export async function findRecentPayment(userId: string, hours: number = 24): Pro
     throw error;
   }
 }
+
+/**
+ * Registra o uso de um cupom por um usuário
+ */
+export async function registerCouponUsage(couponId: string, userId: string): Promise<boolean> {
+  logDebug(`Registrando uso do cupom ${couponId} pelo usuário ${userId}`);
+  
+  try {
+    const { data, error } = await supabase
+      .from('coupon_usages')
+      .insert({
+        coupon_id: couponId,
+        user_id: userId,
+        used_at: new Date().toISOString()
+      });
+
+    if (error) {
+      logError('Erro ao registrar uso do cupom', error);
+      return false;
+    }
+
+    logDebug('Uso do cupom registrado com sucesso');
+    return true;
+  } catch (error) {
+    logError('Erro ao registrar uso do cupom', error);
+    return false;
+  }
+}
+
+/**
+ * Incrementa o contador de uso de um cupom
+ */
+export async function incrementCouponUsageCount(couponId: string): Promise<boolean> {
+  logDebug(`Incrementando contador de uso do cupom ${couponId}`);
+  
+  try {
+    // Primeiro, obter o contador atual
+    const { data: couponData, error: couponError } = await supabase
+      .from('coupons')
+      .select('usage_count')
+      .eq('id', couponId)
+      .single();
+
+    if (couponError) {
+      logError('Erro ao obter contador de uso do cupom', couponError);
+      return false;
+    }
+
+    const currentCount = couponData?.usage_count || 0;
+    
+    // Incrementar o contador
+    const { error } = await supabase
+      .from('coupons')
+      .update({
+        usage_count: currentCount + 1,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', couponId);
+
+    if (error) {
+      logError('Erro ao incrementar contador de uso do cupom', error);
+      return false;
+    }
+
+    logDebug(`Contador de uso do cupom incrementado para ${currentCount + 1}`);
+    return true;
+  } catch (error) {
+    logError('Erro ao incrementar contador de uso do cupom', error);
+    return false;
+  }
+}
+
+/**
+ * Registra o uso completo de um cupom (insere registro e incrementa contador)
+ */
+export async function registerCompleteCouponUsage(couponId: string, userId: string): Promise<boolean> {
+  logDebug(`Registrando uso completo do cupom ${couponId} pelo usuário ${userId}`);
+  
+  try {
+    // Registrar o uso
+    const usageRegistered = await registerCouponUsage(couponId, userId);
+    
+    // Incrementar o contador
+    const counterIncremented = await incrementCouponUsageCount(couponId);
+    
+    // Log do resultado
+    if (usageRegistered && counterIncremented) {
+      logDebug('Uso completo do cupom registrado com sucesso');
+      return true;
+    } else {
+      logError('Erro ao registrar uso completo do cupom', { usageRegistered, counterIncremented });
+      return false;
+    }
+  } catch (error) {
+    logError('Erro ao registrar uso completo do cupom', error);
+    return false;
+  }
+}

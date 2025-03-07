@@ -237,6 +237,39 @@ async function processPaymentWithData(payment: PaymentDetails, attemptData: any)
     }
   }
   
+  // Registrar o uso do cupom, se houver
+  if (attemptData.coupon_id) {
+    logDebug(`Cupom detectado: ${attemptData.coupon_id} (${attemptData.coupon_code})`);
+    
+    try {
+      // Registrar uso completo do cupom (registro na tabela coupon_usages e incremento no contador)
+      const couponRegistered = await db.registerCompleteCouponUsage(attemptData.coupon_id, userId);
+      
+      if (couponRegistered) {
+        logDebug(`Uso do cupom ${attemptData.coupon_code} registrado com sucesso`);
+        
+        // Adicionar informação do cupom no log financeiro
+        await db.createFinancialLog(
+          userId,
+          'coupon_used',
+          `Cupom ${attemptData.coupon_code} aplicado no pagamento`,
+          {
+            coupon_id: attemptData.coupon_id,
+            coupon_code: attemptData.coupon_code,
+            original_price: attemptData.original_price,
+            discount_amount: attemptData.discount_amount,
+            payment_id: payment.id
+          }
+        );
+      } else {
+        logError(`Erro ao registrar uso do cupom ${attemptData.coupon_code}`);
+      }
+    } catch (error) {
+      logError('Erro ao processar registro de cupom', error);
+      // Não interromper o fluxo principal em caso de erro no registro do cupom
+    }
+  }
+  
   // Registrar um log financeiro
   await db.createFinancialLog(
     userId,
@@ -246,7 +279,8 @@ async function processPaymentWithData(payment: PaymentDetails, attemptData: any)
       payment_id: payment.id,
       amount: payment.transaction_amount,
       plan_name: planNameToUse,
-      plan_interval: planIntervalToUse
+      plan_interval: planIntervalToUse,
+      coupon_applied: attemptData.coupon_id ? true : false
     }
   );
   

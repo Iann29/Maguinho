@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from '../lib/supabaseClient';
 import { ArrowLeft, CreditCard, Check } from "lucide-react";
+import CouponForm from "../components/CouponForm";
 
 // Interface para os planos
 interface Plan {
@@ -30,6 +31,9 @@ export function SubscriptionPage() {
   const [preferenceId, setPreferenceId] = useState<string | null>(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [billingInterval, setBillingInterval] = useState<'mensal' | 'trimestral' | 'anual'>('mensal');
+  // Estados para o cupom
+  const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
+  const [finalPrice, setFinalPrice] = useState<number | null>(null);
   const navigate = useNavigate();
 
   // Lista de planos
@@ -129,6 +133,14 @@ export function SubscriptionPage() {
   // Filtrar planos com base no intervalo de cobrança selecionado
   const filteredPlans = plans.filter(plan => plan.interval === billingInterval);
 
+  // Função para lidar com a aplicação de cupons
+  const handleApplyCoupon = (couponData: any) => {
+    setAppliedCoupon(couponData.code ? couponData : null);
+    if (selectedPlan) {
+      setFinalPrice(couponData.finalPrice);
+    }
+  };
+
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -197,6 +209,29 @@ export function SubscriptionPage() {
     };
   }, [navigate]);
 
+  // Efeito para atualizar o preço final quando o plano é alterado
+  useEffect(() => {
+    if (selectedPlan) {
+      if (appliedCoupon) {
+        // Recalcular o desconto com base no novo plano
+        let discountAmount = 0;
+        
+        if (appliedCoupon.discountType === 'percent') {
+          discountAmount = (selectedPlan.price * appliedCoupon.discountValue) / 100;
+        } else {
+          discountAmount = appliedCoupon.discountValue;
+        }
+        
+        // Garantir que o preço não seja negativo
+        const newFinalPrice = Math.max(0, selectedPlan.price - discountAmount);
+        setFinalPrice(parseFloat(newFinalPrice.toFixed(2)));
+      } else {
+        // Sem cupom, o preço final é o preço do plano
+        setFinalPrice(selectedPlan.price);
+      }
+    }
+  }, [selectedPlan, appliedCoupon]);
+
   const createPaymentPreference = async () => {
     if (!user || !selectedPlan) return;
     
@@ -221,7 +256,12 @@ export function SubscriptionPage() {
           planId: selectedPlan.id,
           planName: selectedPlan.name,
           planPrice: selectedPlan.price,
-          planInterval: selectedPlan.interval
+          planInterval: selectedPlan.interval,
+          // Incluir dados do cupom, se aplicado
+          couponCode: appliedCoupon?.code || null,
+          originalPrice: selectedPlan.price,
+          finalPrice: finalPrice || selectedPlan.price,
+          discountAmount: appliedCoupon?.discountAmount || 0
         })
       });
       
@@ -364,38 +404,63 @@ export function SubscriptionPage() {
           ))}
         </div>
         
-        {/* Seção de pagamento */}
         {selectedPlan && (
-          <div className="bg-[#1C1E21]/60 backdrop-blur-sm rounded-lg border border-[#2A2D31]/50 p-6">
-            <h2 className="text-xl font-semibold mb-4">Finalizar Assinatura</h2>
+          <div className="max-w-2xl mx-auto">
+            {/* Componente de Cupom */}
+            <CouponForm 
+              originalPrice={selectedPlan.price} 
+              onApplyCoupon={handleApplyCoupon} 
+            />
             
-            <div className="mb-6 p-4 bg-[#2A2D31]/50 rounded-lg">
-              <div className="flex justify-between items-center">
-                <div>
-                  <h3 className="font-medium">{selectedPlan.name} ({selectedPlan.interval})</h3>
-                  <p className="text-gray-400 text-sm">Acesso completo às funcionalidades</p>
+            {/* Resumo do pedido */}
+            <div className="bg-[#1C1E21] rounded-lg p-6 mb-8">
+              <h3 className="text-xl font-bold mb-4">Resumo do pedido</h3>
+              
+              <div className="space-y-3 mb-4">
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Plano</span>
+                  <span>{selectedPlan.name}</span>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold">R$ {selectedPlan.price.toFixed(2)}</p>
+                
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Período</span>
+                  <span>{selectedPlan.interval}</span>
                 </div>
+                
+                {appliedCoupon && (
+                  <div className="flex justify-between text-[#00E7C1]">
+                    <span>Desconto ({appliedCoupon.code})</span>
+                    <span>-R$ {appliedCoupon.discountAmount.toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+              
+              <div className="border-t border-[#2A2D31] my-4"></div>
+              
+              <div className="flex justify-between font-bold text-xl">
+                <span>Total</span>
+                <span>R$ {(finalPrice || selectedPlan.price).toFixed(2)}</span>
               </div>
             </div>
             
-            {error && (
-              <div className="bg-red-500/10 border border-red-500 text-red-500 px-4 py-2 rounded mb-4">
-                {error}
-              </div>
-            )}
-            
-            <div className="space-y-4">
-              {!preferenceId ? (
+            <div className="flex justify-center items-center flex-col gap-4">
+              {error && (
+                <div className="w-full bg-red-900/30 border border-red-800 text-red-200 px-4 py-3 rounded-lg text-center">
+                  {error}
+                </div>
+              )}
+              
+              {!preferenceId && (
                 <button
                   onClick={createPaymentPreference}
                   disabled={processingPayment}
-                  className="w-full bg-[#00E7C1] text-black px-4 py-3 rounded-lg font-medium hover:bg-[#00E7C1]/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="w-full max-w-md py-4 bg-[#00E7C1] text-black font-bold rounded-lg hover:bg-[#00E7C1]/90 transition-colors disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center gap-2"
                 >
                   {processingPayment ? (
-                    'Processando...'
+                    <>
+                      <div className="animate-spin w-5 h-5 border-2 border-black border-t-transparent rounded-full"></div>
+                      <span>Processando...</span>
+                    </>
                   ) : (
                     <>
                       <CreditCard size={20} />
@@ -403,20 +468,12 @@ export function SubscriptionPage() {
                     </>
                   )}
                 </button>
-              ) : (
-                <div className="space-y-4">
-                  <div className="bg-blue-500/10 border border-blue-500/30 text-blue-400 p-4 rounded-lg text-sm">
-                    <p className="mb-2 font-medium">Você será redirecionado para a página de pagamento seguro do Mercado Pago.</p>
-                    <p>Após concluir o pagamento, você será automaticamente redirecionado de volta para o Maguinho.</p>
-                  </div>
-                  
-                  <div className="checkout-button"></div>
-                </div>
               )}
               
-              <p className="text-xs text-gray-400 text-center">
-                Pagamento processado com segurança pelo Mercado Pago.
-                Você pode cancelar sua assinatura a qualquer momento.
+              <div className="checkout-button w-full max-w-md" style={{ display: preferenceId ? 'block' : 'none' }}></div>
+              
+              <p className="text-sm text-gray-400 text-center max-w-md">
+                Processamento seguro via Mercado Pago. Você será cobrado apenas após a confirmação.
               </p>
             </div>
           </div>
