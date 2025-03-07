@@ -239,7 +239,7 @@ async function processPaymentWithData(payment: PaymentDetails, attemptData: any)
   
   // Registrar o uso do cupom, se houver
   if (attemptData.coupon_id) {
-    logDebug(`Cupom detectado: ${attemptData.coupon_id} (${attemptData.coupon_code})`);
+    logDebug(`Cupom detectado nos metadados: ${attemptData.coupon_id} (${attemptData.coupon_code})`);
     
     try {
       // Registrar uso completo do cupom (registro na tabela coupon_usages e incremento no contador)
@@ -256,8 +256,8 @@ async function processPaymentWithData(payment: PaymentDetails, attemptData: any)
           {
             coupon_id: attemptData.coupon_id,
             coupon_code: attemptData.coupon_code,
-            original_price: attemptData.original_price,
-            discount_amount: attemptData.discount_amount,
+            original_price: attemptData.original_price || 0,
+            discount_amount: attemptData.discount_amount || 0,
             payment_id: payment.id
           }
         );

@@ -5,11 +5,32 @@ import { processPayment } from '../services/payment-processor.ts';
 import { PaymentNotification } from '../types.ts';
 import { getPaymentDetails } from '../services/mercadopago.ts';
 import { getValidToken } from '../utils/tokens.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../config.ts';
 
 /**
  * Processa o webhook do Mercado Pago
  */
 export async function handleWebhook(req: Request): Promise<Response> {
+  // Log imediato para verificar se a função está sendo chamada
+  console.log('Webhook MP recebido: ' + new Date().toISOString());
+  
+  // Registrar o recebimento do webhook em uma tabela específica para garantir
+  try {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    await supabase.from('webhook_logs').insert({
+      provider: 'mercado_pago',
+      event_type: 'webhook_call',
+      payload: { 
+        timestamp: new Date().toISOString(),
+        url: req.url,
+        method: req.method
+      }
+    });
+  } catch (e) {
+    console.error('Erro ao registrar webhook_log:', e);
+  }
+
   // Lidar com requisições OPTIONS para CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
