@@ -181,7 +181,22 @@ serve(async (req) => {
     }
 
     // Obter dados do corpo da requisição
-    const { planId, planName, planPrice, planInterval, userName, couponCode } = await req.json()
+    const requestData = await req.json();
+    const { 
+      planId, 
+      planName, 
+      planPrice, 
+      planInterval, 
+      userName, 
+      couponCode,
+      // Novos parâmetros para gerenciar assinatura
+      isPlanChange = false,
+      currentSubscriptionId = null,
+      currentPlanId = null,
+      currentPlanEndDate = null,
+      isImmediate = false,
+      upgradeDiscount = 0
+    } = requestData;
 
     // Validar os dados do plano
     if (!planId || !planPrice || !planInterval) {
@@ -197,6 +212,13 @@ serve(async (req) => {
     let appliedCoupon = null;
     let couponError = null;
 
+    // Adicionar desconto promocional para upgrade de plano
+    if (isPlanChange && upgradeDiscount > 0) {
+      console.log(`Aplicando desconto promocional de upgrade: R$ ${upgradeDiscount}`);
+      discountAmount += upgradeDiscount;
+      finalPrice = Math.max(0, finalPrice - upgradeDiscount);
+    }
+
     // Verificar e aplicar cupom, se fornecido
     if (couponCode) {
       console.log(`Validando cupom: ${couponCode} para usuário: ${user.id}`);
@@ -204,12 +226,13 @@ serve(async (req) => {
       
       if (couponValidation.valid && couponValidation.coupon) {
         appliedCoupon = couponValidation.coupon;
-        const originalPrice = planPrice;
-        finalPrice = applyDiscount(originalPrice, appliedCoupon);
-        discountAmount = originalPrice - finalPrice;
+        const originalPrice = planPrice - (isPlanChange ? upgradeDiscount : 0); // Considerar preço após desconto promocional
+        const couponDiscountAmount = originalPrice - applyDiscount(originalPrice, appliedCoupon);
+        finalPrice = Math.max(0, finalPrice - couponDiscountAmount);
+        discountAmount += couponDiscountAmount;
         
         console.log(`Cupom válido: ${appliedCoupon.code}, tipo: ${appliedCoupon.discount_type}, valor: ${appliedCoupon.discount_value}`);
-        console.log(`Preço original: ${originalPrice}, preço com desconto: ${finalPrice}, desconto: ${discountAmount}`);
+        console.log(`Preço original: ${planPrice}, preço com descontos: ${finalPrice}, desconto total: ${discountAmount}`);
         
         // Incrementar o contador de uso do cupom
         const { error: updateError } = await supabase
@@ -235,12 +258,24 @@ serve(async (req) => {
     console.log('Tentando criar preferência de pagamento com o Mercado Pago');
     console.log('Cabeçalho de autorização: Bearer ' + accessToken.substring(0, 10) + '...');
     
-    // Montar o payload com os metadados, incluindo informações do cupom se aplicável
-    const payloadMetadata = {
+    // Montar o payload com os metadados, incluindo informações do cupom e mudança de plano se aplicável
+    const payloadMetadata: any = {
       user_id: user.id,
       plan_id: planId,
       plan_interval: planInterval
     };
+
+    // Adicionar metadados específicos para mudança de plano
+    if (isPlanChange) {
+      payloadMetadata.is_plan_change = true;
+      payloadMetadata.current_subscription_id = currentSubscriptionId;
+      payloadMetadata.current_plan_id = currentPlanId;
+      payloadMetadata.is_immediate = isImmediate;
+      
+      if (upgradeDiscount > 0) {
+        payloadMetadata.upgrade_discount = upgradeDiscount;
+      }
+    }
 
     if (appliedCoupon) {
       Object.assign(payloadMetadata, {
@@ -249,6 +284,24 @@ serve(async (req) => {
         original_price: planPrice,
         discount_amount: discountAmount
       });
+    }
+
+    // Texto do título e descrição
+    let itemTitle = planName || 'Assinatura Maguinho';
+    let itemDescription = `Assinatura ${planInterval} do Maguinho`;
+    
+    // Modificar para casos de alteração de plano
+    if (isPlanChange) {
+      itemTitle = `Alteração para ${planName}`;
+      itemDescription = `Alteração de plano para ${planName} (${planInterval})`;
+    }
+    
+    if (appliedCoupon) {
+      itemDescription += ` com cupom ${appliedCoupon.code}`;
+    }
+    
+    if (isPlanChange && upgradeDiscount > 0) {
+      itemDescription += ` (inclui desconto promocional de R$ ${upgradeDiscount.toFixed(2)})`;
     }
 
     const mpResponse = await fetch('https://api.mercadopago.com/checkout/preferences', {
@@ -261,8 +314,8 @@ serve(async (req) => {
         items: [
           {
             id: planId,
-            title: planName || 'Assinatura Maguinho',
-            description: `Assinatura ${planInterval} do Maguinho${appliedCoupon ? ` com cupom ${appliedCoupon.code}` : ''}`,
+            title: itemTitle,
+            description: itemDescription,
             quantity: 1,
             currency_id: 'BRL',
             unit_price: finalPrice
@@ -316,8 +369,8 @@ serve(async (req) => {
             items: [
               {
                 id: planId,
-                title: planName || 'Assinatura Maguinho',
-                description: `Assinatura ${planInterval} do Maguinho${appliedCoupon ? ` com cupom ${appliedCoupon.code}` : ''}`,
+                title: itemTitle,
+                description: itemDescription,
                 quantity: 1,
                 currency_id: 'BRL',
                 unit_price: finalPrice
@@ -353,7 +406,7 @@ serve(async (req) => {
           console.log('Preferência criada com sucesso após retry:', retryResult.id);
           
           // Registrar a tentativa de pagamento no banco de dados
-          const paymentAttemptData = {
+          const paymentAttemptData: any = {
             user_id: user.id,
             preference_id: retryResult.id,
             plan_id: planId,
@@ -373,16 +426,28 @@ serve(async (req) => {
             });
           }
 
+          // Adicionar informações de mudança de plano se aplicável
+          if (isPlanChange) {
+            Object.assign(paymentAttemptData, {
+              is_plan_change: true,
+              current_subscription_id: currentSubscriptionId,
+              current_plan_id: currentPlanId,
+              is_immediate: isImmediate,
+              upgrade_discount: upgradeDiscount
+            });
+          }
+
           await supabase.from('payment_attempts').insert(paymentAttemptData);
           
           return new Response(JSON.stringify({ 
             preferenceId: retryResult.id,
             couponApplied: appliedCoupon ? true : false,
-            originalPrice: appliedCoupon ? planPrice : finalPrice,
+            originalPrice: planPrice,
             finalPrice: finalPrice,
             discountAmount: discountAmount,
             couponCode: appliedCoupon ? appliedCoupon.code : null,
-            couponError: couponError
+            couponError: couponError,
+            isPlanChange: isPlanChange
           }), {
             status: 200,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -400,7 +465,7 @@ serve(async (req) => {
     console.log('Preferência criada com sucesso:', result.id);
 
     // Registrar a tentativa de pagamento no banco de dados
-    const paymentAttemptData = {
+    const paymentAttemptData: any = {
       user_id: user.id,
       preference_id: result.id,
       plan_id: planId,
@@ -420,16 +485,28 @@ serve(async (req) => {
       });
     }
 
+    // Adicionar informações de mudança de plano se aplicável
+    if (isPlanChange) {
+      Object.assign(paymentAttemptData, {
+        is_plan_change: true,
+        current_subscription_id: currentSubscriptionId,
+        current_plan_id: currentPlanId,
+        is_immediate: isImmediate,
+        upgrade_discount: upgradeDiscount
+      });
+    }
+
     await supabase.from('payment_attempts').insert(paymentAttemptData);
 
     return new Response(JSON.stringify({
       preferenceId: result.id,
       couponApplied: appliedCoupon ? true : false,
-      originalPrice: appliedCoupon ? planPrice : finalPrice,
+      originalPrice: planPrice,
       finalPrice: finalPrice,
       discountAmount: discountAmount,
       couponCode: appliedCoupon ? appliedCoupon.code : null,
-      couponError: couponError
+      couponError: couponError,
+      isPlanChange: isPlanChange
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
