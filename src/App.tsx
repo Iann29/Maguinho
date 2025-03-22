@@ -6,6 +6,7 @@ import { ResetPasswordPage } from './pages/ResetPasswordPage';
 import { UpdatePasswordPage } from './pages/UpdatePasswordPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { SubscriptionPage } from './pages/SubscriptionPage';
+import { GerenciarAssinaturaPage } from './pages/GerenciarAssinaturaPage';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { motion } from 'framer-motion';
@@ -72,6 +73,7 @@ function App() {
         <Route path="/update-password" element={<Layout><UpdatePasswordPage /></Layout>} />
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/subscription" element={<SubscriptionPage />} />
+        <Route path="/gerenciar-assinatura" element={<GerenciarAssinaturaPage />} />
         <Route path="/subscription/success" element={<Layout><SubscriptionSuccessPage /></Layout>} />
         <Route path="/subscription/failure" element={<Layout><SubscriptionFailurePage /></Layout>} />
         <Route path="/subscription/pending" element={<Layout><SubscriptionPendingPage /></Layout>} />
