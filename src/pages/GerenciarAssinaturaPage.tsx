@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from '../lib/supabaseClient';
-import { ArrowLeft, Check, AlertCircle, Calendar, CreditCard, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, AlertCircle, Calendar, CreditCard, ShieldCheck, Ticket } from "lucide-react";
 
 // Interface para os planos
 interface Plan {
@@ -26,6 +26,18 @@ interface Subscription {
   billing_frequency: string;
   subscription_id: string;
   override_price: number;
+  coupon_id: string | null;
+}
+
+// Interface para os cupons
+interface Coupon {
+  id: string;
+  code: string;
+  discount_type: 'percent' | 'fixed';
+  discount_value: number;
+  usage_limit: number;
+  usage_count: number;
+  expires_at: string | null;
 }
 
 // Interface para o plano atual na tabela plans
@@ -51,6 +63,7 @@ export function GerenciarAssinaturaPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [preferenceId, setPreferenceId] = useState<string | null>(null);
+  const [couponData, setCouponData] = useState<Coupon | null>(null);
   const navigate = useNavigate();
 
   // Lista de planos
@@ -259,6 +272,23 @@ export function GerenciarAssinaturaPage() {
               }
             }
           }
+          
+          // Buscar informações do cupom, se existir
+          if (subscriptionData.coupon_id) {
+            const { data: coupon, error: couponError } = await supabase
+              .from('coupons')
+              .select('*')
+              .eq('id', subscriptionData.coupon_id)
+              .single();
+              
+            if (couponError) {
+              console.error('Erro ao buscar dados do cupom:', couponError);
+            } else {
+              setCouponData(coupon);
+              console.log('Cupom aplicado na assinatura:', coupon);
+            }
+          }
+          
           setLoadingPlans(false);
         }
         
@@ -297,10 +327,39 @@ export function GerenciarAssinaturaPage() {
     setPreferenceId(null);
   };
 
-  const calculatePriceDifference = () => {
-    if (!currentPlan || !selectedPlan) return 0;
+  // Função para determinar o desconto para upgrade entre planos
+  const getUpgradeDiscount = (currentPlanId: string, newPlanId: string): number => {
+    // Sempre verificar se é um upgrade (do básico para premium)
+    const isBasicToPremium = 
+      (currentPlanId.includes('basico') && newPlanId.includes('premium')) &&
+      (currentPlanId.split('_')[2] === newPlanId.split('_')[2]); // mesmo intervalo
     
-    return selectedPlan.price - currentPlan.price;
+    if (!isBasicToPremium) return 0;
+    
+    // Verificar o intervalo para definir o valor do desconto
+    if (newPlanId.includes('mensal')) {
+      return 5.00;
+    } else if (newPlanId.includes('trimestral')) {
+      return 10.00;
+    } else if (newPlanId.includes('anual')) {
+      return 30.00;
+    }
+    
+    return 0;
+  };
+  
+  // Função para calcular o preço final do novo plano após desconto promocional
+  const calculateFinalPrice = () => {
+    if (!selectedPlan) return 0;
+    
+    // Preço base do novo plano
+    const newPlanPrice = selectedPlan.price;
+    
+    // Obter desconto promocional para upgrade
+    const upgradeDiscount = getUpgradeDiscount(currentPlan?.id || '', selectedPlan.id);
+    
+    // Aplicar o desconto ao preço do novo plano
+    return Math.max(0, newPlanPrice - upgradeDiscount);
   };
 
   const formatDate = (dateString: string) => {
@@ -336,6 +395,11 @@ export function GerenciarAssinaturaPage() {
         throw new Error('ID do plano inválido');
       }
       
+      // Calcular o preço final do novo plano após desconto promocional
+      const newPlanPrice = selectedPlan.price;
+      const upgradeDiscount = getUpgradeDiscount(currentPlan.id, selectedPlan.id);
+      const finalPrice = Math.max(0, newPlanPrice - upgradeDiscount);
+      
       // Chamar a Edge Function para criar a preferência de pagamento
       const response = await fetch('/api/create-payment-preference', {
         method: 'POST',
@@ -346,7 +410,7 @@ export function GerenciarAssinaturaPage() {
         body: JSON.stringify({
           planId: selectedPlan.id,
           planName: selectedPlan.name,
-          planPrice: selectedPlan.price,
+          planPrice: finalPrice, // Preço com desconto promocional
           planInterval: selectedPlan.interval,
           userName: user.name || user.email,
           
@@ -355,7 +419,8 @@ export function GerenciarAssinaturaPage() {
           currentSubscriptionId: subscription.id,
           currentPlanId: currentPlan.id,
           currentPlanEndDate: subscription.end_date,
-          isImmediate: changeOption === 'immediate'
+          isImmediate: changeOption === 'immediate',
+          upgradeDiscount: upgradeDiscount
         })
       });
       
@@ -502,10 +567,30 @@ export function GerenciarAssinaturaPage() {
                 <span>{currentPlan.interval}</span>
               </div>
               
-              <div className="flex justify-between">
-                <span className="text-gray-400">Valor</span>
-                <span>R$ {currentPlan.price.toFixed(2)}</span>
-              </div>
+              {subscription.coupon_id && couponData ? (
+                <>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Valor original</span>
+                    <span className="line-through text-gray-400">R$ {currentPlan.price.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Cupom aplicado</span>
+                    <span className="text-[#00E7C1] flex items-center gap-1">
+                      <Ticket size={16} />
+                      {couponData.code}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gray-400">Valor com desconto</span>
+                    <span className="font-medium">R$ {subscription.override_price.toFixed(2)}</span>
+                  </div>
+                </>
+              ) : (
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Valor</span>
+                  <span>R$ {currentPlan.price.toFixed(2)}</span>
+                </div>
+              )}
               
               <div className="flex justify-between">
                 <span className="text-gray-400">Data de início</span>
@@ -663,9 +748,7 @@ export function GerenciarAssinaturaPage() {
                     <div className="font-medium">Imediatamente</div>
                   </div>
                   <p className="ml-8 text-sm text-gray-400 mt-1">
-                    {calculatePriceDifference() > 0
-                      ? 'Você será cobrado proporcionalmente pela diferença entre os planos.'
-                      : 'Você receberá crédito proporcional pela diferença entre os planos.'}
+                    Você será cobrado imediatamente o valor do novo plano com desconto promocional.
                   </p>
                 </div>
                 
@@ -713,32 +796,42 @@ export function GerenciarAssinaturaPage() {
                 </div>
                 
                 <div className="flex justify-between">
-                  <span className="text-gray-400">Preço atual</span>
-                  <span>R$ {currentPlan.price.toFixed(2)}</span>
-                </div>
-                
-                <div className="flex justify-between">
                   <span className="text-gray-400">Novo preço</span>
                   <span>R$ {selectedPlan.price.toFixed(2)}</span>
                 </div>
                 
+                {/* Mostrar desconto de upgrade quando aplicável */}
+                {getUpgradeDiscount(currentPlan.id, selectedPlan.id) > 0 && (
+                  <div className="flex justify-between text-[#00E7C1]">
+                    <span>Desconto promocional</span>
+                    <span>-R$ {getUpgradeDiscount(currentPlan.id, selectedPlan.id).toFixed(2)}</span>
+                  </div>
+                )}
+                
                 <div className="border-t border-[#2A2D31] my-4"></div>
                 
                 <div className="flex justify-between font-medium">
-                  <span>Diferença</span>
-                  <span className={calculatePriceDifference() >= 0 ? 'text-orange-400' : 'text-[#00E7C1]'}>
-                    {calculatePriceDifference() >= 0 ? '+' : ''}
-                    R$ {calculatePriceDifference().toFixed(2)}
+                  <span>Valor final</span>
+                  <span className="text-white text-lg">
+                    R$ {calculateFinalPrice().toFixed(2)}
                   </span>
                 </div>
                 
-                {changeOption === 'immediate' && calculatePriceDifference() !== 0 && (
+                <div className="flex items-start gap-2 text-sm mt-4 p-3 bg-[#00E7C1]/10 border border-[#00E7C1]/30 rounded-lg">
+                  <Ticket size={18} className="text-[#00E7C1] flex-shrink-0 mt-0.5" />
+                  <span>
+                    Ao trocar para um plano Premium, você ganha um desconto promocional de 
+                    {currentPlan && selectedPlan && getUpgradeDiscount(currentPlan.id, selectedPlan.id) > 0 ? 
+                      ` R$ ${getUpgradeDiscount(currentPlan.id, selectedPlan.id).toFixed(2)}` : 
+                      ' especial'}.
+                  </span>
+                </div>
+                
+                {changeOption === 'immediate' && (
                   <div className="flex items-start gap-2 text-sm mt-4 p-3 bg-[#2A2D31] rounded-lg">
-                    <AlertCircle size={18} className={calculatePriceDifference() > 0 ? 'text-orange-400' : 'text-[#00E7C1]'} />
+                    <AlertCircle size={18} className="text-orange-400" />
                     <span>
-                      {calculatePriceDifference() > 0 
-                        ? 'Você será cobrado imediatamente pela diferença proporcional ao tempo restante do ciclo atual.' 
-                        : 'Você receberá um crédito proporcional ao tempo restante do ciclo atual.'}
+                      Você será cobrado imediatamente o valor do novo plano com desconto promocional.
                     </span>
                   </div>
                 )}
@@ -795,7 +888,7 @@ export function GerenciarAssinaturaPage() {
               
               <p className="text-sm text-gray-400 text-center max-w-md">
                 {changeOption === 'immediate'
-                  ? 'Ao confirmar, você concorda com a cobrança/reembolso proporcional da diferença entre os planos.'
+                  ? 'Ao confirmar, você concorda em pagar o valor do novo plano com desconto promocional.'
                   : 'Você continuará com seu plano atual até o final do ciclo de faturamento.'}
               </p>
             </div>
